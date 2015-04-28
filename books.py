@@ -137,10 +137,9 @@ def exchange_books():
 @app.route('/lend_books', methods=['GET', 'POST'])
 def lend_books():
     if request.method == 'POST':
-        a = 2
         choiceDict = request.values
         for key in choiceDict:
-            handleBook(choiceDict[key])
+            handleBook(choiceDict[key], g.user())
 
         return redirect('/mybooks')
     return render_template("lend_books.html")
