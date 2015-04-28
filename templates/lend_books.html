@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1>So you want to lend books, eh?</h1>
+<p> Enter the list of books you want to lend</p>
+<div class="lend_books">
+<div class="lend_book_entry">
+ <form action="" method="post" id="lend_books_form">
+  Book Name: <input type="text" value="Book Name" name="bookname"><br>
+  <div class="lend_books_button_class">
+  <input type="button" value="More Books to Lend?" name="more_books" id="more_lend_books">
+  </div>
+  <input type="submit" value="All Done" id="submit_lend_books">
+</form>
+</div>
+</div>
+
+{% endblock %}

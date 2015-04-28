@@ -1,0 +1,28 @@
+<html>
+  <head>
+   {% if title %}
+    <title>{{ title }} - Virtual Library</title>
+    {% else %}
+    <title>Virtual Library</title>
+    {% endif %}
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <div class="bigTitle">
+    <div>Virtual Library: <a href="/index">Home</a></div>
+    </div>
+    <hr>
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <ul>
+        {% for message in messages %}
+            <li>{{ message }} </li>
+        {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

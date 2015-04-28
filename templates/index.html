@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block content %}
+    <!-- commented out
+    <h1>Hi, {{ user.nickname }}!</h1>
+    -->
+    <h1> Welcome to distributed library application</h1>
+    <h3> What would you like to do?</h3>
+    <script>
+    function checkData() {
+        var x = document.forms["post"]["book"].value;
+        if (x == null || x == "") {
+            alert("Name must be mentioned");
+            return false;
+        } else {
+            x = x + " added data";
+            alert (x);
+            return true;
+        }
+    }
+    </script>
+
+    <!-- commented out
+    <form action="" method="post" name="post" onsubmit="return checkData()">
+      <table>
+          <tr>
+              <td>Say something:</td>
+              <td>{{ form.post(size=30, maxlength=140) }}</td>
+              <td>
+              {% for error in form.post.errors %}
+              <span style="color: red;">[{{ error }}]</span><br>
+              {% endfor %}
+              </td>
+           </tr>
+           <tr>
+              <td>Enter book name that you have:</td>
+              <td>{{ form.book(size=30, maxlength=140) }}</td>
+              {% for error in form.book.errors %}
+              <span style="color: blue;">[{{ error }}]</span><br>
+              {% endfor %}
+           </tr>
+          <tr>
+              <td></td>
+              <td><input type="submit" value="Enter!"></td>
+              <td></td>
+          </tr>
+      </table>
+     </form>
+     -->
+
+
+     <form action="what_work" method="post" name="work_items">
+         <table>
+              <td></td>
+              <td><input type="submit" name="donate_books" value="Donate Books"></td>
+              <td></td>
+              <td><input type="submit" name="exchange_books" value="Exchange Books"></td>
+              <td></td>
+              <td><input type="submit" name="lend_books" value="Lend Books" id="xxx"></td>
+         </table>
+     </form>
+
+     <!-- commented out
+    <div class="wise_sayings">
+    {% for post in posts %}
+    <div><p>{{ post.author.nickname }} says RRRR: <b>{{ post.body }}</b></p></div>
+    {% endfor %}
+    </div>
+    -->
+{% endblock %}

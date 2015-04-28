@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1>Your Books</h1>
+<p> You have no books at this time, check back later</p>
+<div class="books_list">
+<div class="book_entry">
+{% for book,bookurl in your_books %}
+    <div><p> <b>{{ book }}</b> <a href={{ bookurl }}>Book Details</a> </p></div>
+{% endfor %}
+</div>
+</div>
+{% endblock %}

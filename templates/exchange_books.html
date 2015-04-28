@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1>So you want to exchange books, eh?</h1>
+<p> Enter the list of books you want to exchange</p>
+
+<form action="" method="post" name="exchange_books_post">
+<div class="books_list">
+<div class="book_entry">
+
+<p> Whom do you want to exchange books with?</p>
+ <select name="choice_of_group" size="2">
+  <option value="All">All</option>
+  <option value="With my select friends">friends_only</option>
+ </select>
+ <input type="submit" value="Select">
+</div>
+</div>
+</form>
+
+{% endblock %}
