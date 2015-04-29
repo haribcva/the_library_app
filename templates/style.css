@@ -1,0 +1,23 @@
+.bigTitle {
+  height: 250px;
+  background-image:url('http://www.brickrow.com/brickrow/images/brbs-e.jpg');
+  color: red;
+  font-size: 48px;
+  font-family: 'Shift', sans-serif;
+  font-weight: bold;
+
+}
+
+.bigTitle a {
+  color: yellow;
+  font-size: 24px;
+}
+.books_list{
+    color:green;
+}
+
+.wise_sayings p {
+    color: brown;
+    font-size: 48px;
+    font-weight: bold;
+}
