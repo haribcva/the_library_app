@@ -7,6 +7,8 @@ import os, sys
 from flask import render_template, flash, redirect, session, url_for, request, g
 from flask.ext.login import login_user, logout_user, current_user, login_required
 
+from library import *
+
 
 WTF_CSRF_ENABLED = True
 SECRET_KEY = 'you-will-never-guess'
@@ -37,9 +39,6 @@ from wtforms.validators import DataRequired
 lm = LoginManager()
 lm.init_app(app)
 lm.login_view = 'login'
-
-def handleBook(book,user="default"):
-    print (book)
 
 @lm.user_loader
 def load_user(id):
@@ -95,16 +94,6 @@ class PostForm(Form):
     post = StringField('post', validators=[DataRequired()])
     book = StringField('book', validators=[DataRequired()])
 
-def add_book_to_database(bookname, user_name):
-    # write to a file
-    try:
-         line = bookname + ":" + user_name
-         outFile = open('output.txt', mode='w')
-         outFile.write(line)
-    except:
-        pass
-
-    outFile.close()
 
 @app.route('/style.css', methods=['GET'])
 def get_style_css():
@@ -139,7 +128,7 @@ def lend_books():
     if request.method == 'POST':
         choiceDict = request.values
         for key in choiceDict:
-            handleBook(choiceDict[key], g.user())
+            add_book(choiceDict[key], "haribcva@gmail.com")
 
         return redirect('/mybooks')
     return render_template("lend_books.html")
@@ -162,59 +151,31 @@ def get_whatwork():
 
 @app.route('/mybooks', methods=['GET', 'POST'])
 def get_mybooks():
-    flash ("to get all your books")
-    books = [("Harry Potter","http://en.wikipedia.org/wiki/Harry_Potter"),
-             ("Bhagvad Gita", "http://en.wikipedia.org/wiki/Harry_Potter"),
-             ("Learn HTM5", "http://en.wikipedia.org/wiki/Harry_Potter")]
+    # flash ("to get all your books")
+    books = get_books()
+    # books = [("water",""), ("air","")]
     return render_template("my_books.html",
                            title='My Books',
-                            your_books=books)
+                           your_books=books)
 
 # @login_required
 @app.route('/', methods=['GET', 'POST'])
 @app.route('/index', methods=['GET', 'POST'])
 def index():
-    # myfunc()
-    # return myfunc()
 
     user = {'nickname': 'Miguel'}  # fake user
     # user = g.user()
-    # flash("after logging got user as: " + g.user())
 
-    posts = [  # fake array of posts
-        {
-            'author': {'nickname': 'John'},
-            'body': 'Beautiful day in Portland!'
-        },
-        {
-            'author': {'nickname': 'Susan'},
-            'body': 'The Avengers movie was so cool!'
-        }
-    ]
     form = PostForm()
     if form.is_submitted():
-    # if form.validate_on_submit():
-    # if request.method == 'POST':
-        # flash ("form submitted")
-
-        post = form.post.data
-        book = form.book.data
-        book_string = str(book)
-        add_book_to_database(book_string, "hari")
-        flash('Your book data is received')
-
         return redirect('/login')
     else:
-        # flash("no post for you")
-        a = None
+        pass
 
-    # flash(form)
-    # flash("XXX")
     return render_template("index.html",
                            title='Home',
                            user=user,
-                           form=form,
-                           posts=posts)
+                           form=form)
 
 if __name__ == '__main__':
     sys.path.extend(['C:\\Users\\haribala\\PycharmProjects\\helloWorld'])
