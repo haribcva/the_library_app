@@ -43,7 +43,8 @@ def remove_book():
 def get_books():
     books = []
     for book in lend_books_db:
-        books.append((book, ""))
+        books.append((book, "/mybooks/water/"))
+
     return books
 
 def show_book():
