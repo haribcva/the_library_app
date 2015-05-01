@@ -1,9 +1,17 @@
 {% extends "base.html" %}
 {% block content %}
-    <!-- commented out
+    
     <h1>Hi, {{ user.nickname }}!</h1>
-    -->
+    
     <h1> Welcome to distributed library application</h1>
+    <div class="borrowed_books_class">
+      <p> Your have the following books borrowed </p>
+      {% for book in borrowed_books %}
+      <div><p>{{ book }} </p></div>
+      {% endfor %}
+
+    </div>
+    
     <h3> What would you like to do?</h3>
     <script>
     function checkData() {
@@ -19,35 +27,6 @@
     }
     </script>
 
-    <!-- commented out
-    <form action="" method="post" name="post" onsubmit="return checkData()">
-      <table>
-          <tr>
-              <td>Say something:</td>
-              <td>{{ form.post(size=30, maxlength=140) }}</td>
-              <td>
-              {% for error in form.post.errors %}
-              <span style="color: red;">[{{ error }}]</span><br>
-              {% endfor %}
-              </td>
-           </tr>
-           <tr>
-              <td>Enter book name that you have:</td>
-              <td>{{ form.book(size=30, maxlength=140) }}</td>
-              {% for error in form.book.errors %}
-              <span style="color: blue;">[{{ error }}]</span><br>
-              {% endfor %}
-           </tr>
-          <tr>
-              <td></td>
-              <td><input type="submit" value="Enter!"></td>
-              <td></td>
-          </tr>
-      </table>
-     </form>
-     -->
-
-
      <form action="what_work" method="post" name="work_items">
          <table>
               <td></td>
@@ -59,11 +38,5 @@
          </table>
      </form>
 
-     <!-- commented out
-    <div class="wise_sayings">
-    {% for post in posts %}
-    <div><p>{{ post.author.nickname }} says RRRR: <b>{{ post.body }}</b></p></div>
-    {% endfor %}
-    </div>
-    -->
+    
 {% endblock %}

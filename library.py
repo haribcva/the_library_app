@@ -56,6 +56,11 @@ def show_book():
 def borrow_book():
     pass
 
+def get_borrowed_books(email_addr):
+    books = ["Water", "Air"]
+    return books
+    
+
 def add_book_to_database(bookname, user_name):
     # write to a file
     try:

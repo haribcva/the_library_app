@@ -25,7 +25,6 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(basedir, 'app.db')
 SQLALCHEMY_MIGRATE_REPO = os.path.join(basedir, 'db_repository')
 
-
 app = Flask(__name__)
 app.config.from_object('config')
 lm = LoginManager()
@@ -35,60 +34,6 @@ oid = OpenID(app, os.path.join(basedir, 'tmp'))
 from flask.ext.wtf import Form
 from wtforms import StringField, BooleanField
 from wtforms.validators import DataRequired
-
-lm = LoginManager()
-lm.init_app(app)
-lm.login_view = 'login'
-
-@lm.user_loader
-def load_user(id):
-    return 100
-
-class LoginForm(Form):
-    openid = StringField('openid', validators=[DataRequired()])
-    remember_me = BooleanField('remember_me', default=False)
-
-@app.before_request
-def before_request():
-    g.user = current_user
-
-@app.route('/login', methods=['GET', 'POST'])
-@oid.loginhandler
-def login():
-    flash("to login now")
-    # flash(g.user())
-    # if g.user is not None and g.user.is_authenticated():
-    #    return redirect(url_for('index'))
-    if 'logged in' in session:
-        flash("logged in done for this session")
-        return redirect('/index')
-    form = LoginForm()
-    if form.validate_on_submit():
-        session['remember_me'] = form.remember_me.data
-        return oid.try_login(form.openid.data, ask_for=['nickname', 'email'])
-        # return redirect('/index')
-    return render_template('login.html',
-                           title='Sign In',
-                           form=form,
-                           providers=OPENID_PROVIDERS)
-
-@oid.after_login
-def after_login(resp):
-    if resp.email is None or resp.email == "":
-        flash('Invalid login. Please try again.')
-        return redirect(url_for('login'))
-    # user = User.query.filter_by(email=resp.email).first()
-    flash('got email as ' + resp.email)
-    nickname = resp.email.split('@')[0]
-    flash("hello " + nickname + " !!")
-    remember_me = False
-    if 'remember_me' in session:
-        remember_me = session['remember_me']
-        session.pop('remember_me', None)
-    # login_user(user, remember = remember_me)
-    session['logged in'] = True
-    return redirect('/index')
-    # return redirect(request.args.get('next') or url_for('index'))
 
 class PostForm(Form):
     post = StringField('post', validators=[DataRequired()])
@@ -161,27 +106,88 @@ def get_mybooks(path):
                            title='My Books',
                            your_books=books)
 
+##### Login Related Starts from here
+
+lm = LoginManager()
+lm.init_app(app)
+lm.login_view = 'login'
+
+@lm.user_loader
+def load_user(id):
+    return 100
+
+class LoginForm(Form):
+    openid = StringField('openid', validators=[DataRequired()])
+    remember_me = BooleanField('remember_me', default=False)
 
 
-# @login_required
+# initialize per session and session global variables here
+@app.before_request
+def before_request():
+    print ("at before request")
+    g.user = current_user
+
+@app.route('/login', methods=['GET', 'POST'])
+@oid.loginhandler
+def login():
+    # if g.user is not None and g.user.is_authenticated():
+    #    return redirect(url_for('index'))
+    if 'logged in' in session:
+        return redirect('/index')
+    
+    form = LoginForm()
+    if form.validate_on_submit():
+        session['remember_me'] = form.remember_me.data
+        return oid.try_login(form.openid.data, ask_for=['nickname', 'email'])
+                
+    return render_template('login.html',
+                           title='Sign In',
+                           form=form,
+                           providers=OPENID_PROVIDERS)
+
+@oid.after_login
+def after_login(resp):
+    if resp.email is None or resp.email == "":
+        flash('Invalid login. Please try again.')
+        return redirect(url_for('login'))
+    # user = User.query.filter_by(email=resp.email).first()
+    flash('got email as ' + resp.email)
+    session['login_email_addr'] = resp.email
+    nickname = resp.email.split('@')[0]
+    flash("hello " + nickname + " !!")
+    remember_me = False
+    if 'remember_me' in session:
+        remember_me = session['remember_me']
+        session.pop('remember_me', None)
+    # login_user(user, remember = remember_me)
+    session['logged in'] = True
+    return redirect('/index')
+    # return redirect(request.args.get('next') or url_for('index'))
+
+#@login_required
+######### End Login related
 @app.route('/', methods=['GET', 'POST'])
 @app.route('/index', methods=['GET', 'POST'])
 def index():
 
     user = {'nickname': 'Miguel'}  # fake user
-    # user = g.user()
+    user_borrowed_books = {}
 
-    form = PostForm()
-    if form.is_submitted():
-        return redirect('/login')
-    else:
-        pass
+    if (session['logged in'] == True):
+        try:
+            nickname = session['login_email_addr'].split('@')[0]
+            user = {'nickname': nickname}
+            user_borrowed_books = get_borrowed_books(session['login_email_addr'])
+        except:
+            # how did the login_email_addr not be there? use the default faked user for now
+            pass
 
+    
     return render_template("index.html",
                            title='Home',
                            user=user,
-                           form=form)
-
+                           borrowed_books=user_borrowed_books)
+        
 if __name__ == '__main__':
     sys.path.extend(['C:\\Users\\haribala\\PycharmProjects\\helloWorld'])
     app.run()
