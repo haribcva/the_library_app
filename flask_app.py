@@ -100,7 +100,13 @@ def get_mybooks(path):
     # /mybooks/"bookname" should get that book; path == "bookname" in this case
     # /mybooks/app.js and /mybooks/style.css should be ignored.
     # only /mybooks/ should get all books; path == "" in this case
-    books = get_books()
+    books=[]
+    if (path == ''):
+        books = get_books()
+    elif (path.find("@") != -1):
+        books = get_books(user=path)
+    else:
+        books = get_books(name=path)
     # books = [("water",""), ("air","")]
     return render_template("my_books.html",
                            title='My Books',
@@ -130,16 +136,24 @@ def before_request():
 @app.route('/login', methods=['GET', 'POST'])
 @oid.loginhandler
 def login():
+    if request.method == 'POST':
+        print ("in login via POST")
+    else:
+        print ("in login via GET")
+
     # if g.user is not None and g.user.is_authenticated():
     #    return redirect(url_for('index'))
+
     if 'logged in' in session:
+        print ("user had already logged in")
         return redirect('/index')
-    
+
     form = LoginForm()
     if form.validate_on_submit():
+        print ("in driving logic of core login")
         session['remember_me'] = form.remember_me.data
         return oid.try_login(form.openid.data, ask_for=['nickname', 'email'])
-                
+
     return render_template('login.html',
                            title='Sign In',
                            form=form,
@@ -147,8 +161,11 @@ def login():
 
 @oid.after_login
 def after_login(resp):
+    print ("in after_login step")
+
     if resp.email is None or resp.email == "":
         flash('Invalid login. Please try again.')
+        print "invalid login seen"
         return redirect(url_for('login'))
     # user = User.query.filter_by(email=resp.email).first()
     flash('got email as ' + resp.email)
@@ -170,24 +187,24 @@ def after_login(resp):
 @app.route('/index', methods=['GET', 'POST'])
 def index():
 
-    user = {'nickname': 'Miguel'}  # fake user
+    user = {'nickname': 'guest'}  # fake user
     user_borrowed_books = {}
 
-    if (session['logged in'] == True):
-        try:
+    try:
+        if (session['logged in'] == True):
             nickname = session['login_email_addr'].split('@')[0]
             user = {'nickname': nickname}
             user_borrowed_books = get_borrowed_books(session['login_email_addr'])
-        except:
-            # how did the login_email_addr not be there? use the default faked user for now
-            pass
+    except:
+        # login did not happen well, work as guest for now
+        pass
 
-    
+
     return render_template("index.html",
                            title='Home',
                            user=user,
                            borrowed_books=user_borrowed_books)
-        
+
 if __name__ == '__main__':
     sys.path.extend(['C:\\Users\\haribala\\PycharmProjects\\helloWorld'])
     app.run()
