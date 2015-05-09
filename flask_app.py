@@ -30,6 +30,7 @@ app.config.from_object('config')
 lm = LoginManager()
 lm.init_app(app)
 oid = OpenID(app, os.path.join(basedir, 'tmp'))
+initDatabase()
 
 from flask.ext.wtf import Form
 from wtforms import StringField, BooleanField
@@ -77,6 +78,22 @@ def lend_books():
 
         return redirect('/mybooks')
     return render_template("lend_books.html")
+
+@app.route('/borrow', methods=['GET', 'POST'])
+def borrow_books():
+    books=[]
+    if request.method == 'POST':
+        if (request.form["bookname"] == ""):
+            ### user is asking to show all books that he can borrow
+            books = get_borrowable_books(session['loggedin_user'])
+        else:
+            ### user is performing a search with specific bookname.
+            books = regex_search_borrowable_books(session['loggedin_user'], request.form["bookname"])
+
+    return render_template("my_books.html",
+                           title='Books you can borrow',
+                           your_books=books)
+
 
 @app.route('/what_work', methods=['GET', 'POST'])
 def get_whatwork():
@@ -127,11 +144,17 @@ class LoginForm(Form):
     remember_me = BooleanField('remember_me', default=False)
 
 
-# initialize per session and session global variables here
+#before every request is processed, this function is called; it can be used to clear
+#per request variables. "g" should be used to communicate data in the context of
+#current request from the view function that handled the request. Passing args explicitly
+#is one way, but when redirect_url is done, passing args is not possible and
+#"g" is used as a place to dump information between functions that will be valid only
+#in the context of current request.
 @app.before_request
 def before_request():
     print ("at before request")
     g.user = current_user
+    g.something = None
 
 @app.route('/login', methods=['GET', 'POST'])
 @oid.loginhandler
@@ -181,6 +204,15 @@ def after_login(resp):
     return redirect('/index')
     # return redirect(request.args.get('next') or url_for('index'))
 
+def do_something():
+    if g.something:
+        print ("I found something, it is", g.something)
+    else:
+        print ("There is nothing to do")
+
+    return
+        
+
 #@login_required
 ######### End Login related
 @app.route('/', methods=['GET', 'POST'])
@@ -197,8 +229,12 @@ def index():
             user_borrowed_books = get_borrowed_books(session['login_email_addr'])
     except:
         # login did not happen well, work as guest for now
+        # g["something"] = 2
+        g.something = 2
+        session['loggedin_user'] = "None"
         pass
 
+    do_something()
 
     return render_template("index.html",
                            title='Home',
@@ -206,5 +242,4 @@ def index():
                            borrowed_books=user_borrowed_books)
 
 if __name__ == '__main__':
-    sys.path.extend(['C:\\Users\\haribala\\PycharmProjects\\helloWorld'])
     app.run()

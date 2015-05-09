@@ -37,6 +37,19 @@ var main = function() {
 
     });
 
+    $('#search_book_entry').mouseover(function(){
+        $('#all_borrow_books').hide();
+    });
+    $('#search_book_entry').mouseleave(function(){
+        $('#all_borrow_books').show();
+    });
+
+    $('#all_borrow_books').mouseover(function(){
+        $('#search_book_entry').hide();
+    });
+    $('#all_borrow_books').mouseleave(function(){
+        $('#search_book_entry').show();
+    });
 }
 
 $(document).ready(main);
