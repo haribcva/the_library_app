@@ -5,7 +5,7 @@
 <p> You have no books at this time, check back later</p>
 <div class="books_list">
 <div class="book_entry">
-{% for book,bookurl in your_books %}
+{% for book,bookurl,owner,status in your_books %}
     <div><p> <b>{{ book }}</b> <a href={{ bookurl }}>Book Details</a> </p></div>
 {% endfor %}
 </div>

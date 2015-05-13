@@ -2,9 +2,14 @@ __author__ = 'haribala'
 
 import unicodedata
 import shelve
+import os.path
+
+from flask_app import app, bookData, userData
 
 STATUS_FREE     = 0
 STATUS_BORROWED = 1
+
+app.logger.warning("logging from library module")
 
 class appDatabase(object):
     """ base class for the storage of books; it is expected that derived classes
@@ -20,32 +25,14 @@ class appDatabasePickle(appDatabase):
     def store_blob(self, key, blob):
         self.db[key] = blob
 
-class bookData:
-    def __init__(self, owner_email):
-        self.owner = owner_email
-        self.status = STATUS_FREE
-        self.borrowerData = None
-
-class userData:
-    def __init__(self, user_email, user_name, lendPref, exchangePref):
-        self.user_id = user_email
-        self.user_name = user_name
-        self.updateUserData(lendPref, exchangePref)
-
-    def updateUserData(self, lendPref, exchangePref):
-        # all, friends only ("google+" or "facebook")
-        self.lendPref = None
-        if lendPref in ["All", "google+", "facebook"]:
-            self.lendPref = lendPref
-        self.exchangePref = None
-        if exchangePref in ["All", "google+", "facebook"]:
-            self.exchangePref = exchangePref
-
-def initDatabase():
+def initDatabase(path):
     global dbBook, dbUser
 
-    dbBook = appDatabasePickle("./books_database")
-    dbUser = appDatabasePickle("./user_database")
+    db_books_path = os.path.join(path,"db", "books_database");
+    print ("to open dn file", db_books_path)
+    dbBook = appDatabasePickle(db_books_path)
+    db_users_path = os.path.join(path,"db", "users_database");
+    dbUser = appDatabasePickle(db_users_path)
 
 def normalize_unicode(string_list):
     for index, string in enumerate(string_list):
@@ -104,6 +91,7 @@ def add_book(name, owner_email):
 def remove_book():
     pass
 
+# returns [(book, url, owner, status)]
 def get_books(user=None, name=None):
     books = []
     for book in dbBook.db:
@@ -112,7 +100,7 @@ def get_books(user=None, name=None):
             if ((user is None and name is None) or (user is not None and data.owner == user) or (name is not None and book == name.upper())):
         # space in book name don't work for hyperlinks, mangle them
                 book_mangled = book.replace(" ", ";")
-                books.append((book, "/mybooks/"+book_mangled,data))
+                books.append((book, "/mybooks/"+book_mangled,data.owner,data.status))
 
     return books
 
@@ -148,12 +136,17 @@ def get_borrowable_books(current_user):
             if (book_data.status != STATUS_FREE):
                 continue
 
-            owner = dbUser.db[book_data.owner]
-            if (owner.lendPref == "All"):
-                books_url.append((book, "/mybooks/"+book))
-            else:
-                print ("Other Lending Preference not implemented, adding the book anyway")
-                books_url.append((book, "/mybooks/"+book))
+            try:
+                owner = dbUser.db[book_data.owner]
+                if (owner.lendPref == "All"):
+                    books_url.append((book, "/mybooks/"+book))
+                else:
+                    print ("Other Lending Preference not implemented, adding the book anyway")
+                    books_url.append((book, "/mybooks/"+book, book_data.owner, book_data.status))
+            except KeyError:
+                ### user not in database, log it.; till login is implemented, make this book available anyway
+                books_url.append((book, "/mybooks/"+book, book_data.owner, book_data.status))
+                pass
 
     return books_url
 
@@ -162,7 +155,8 @@ def regex_search_borrowable_books(current_user, search_string):
     return books_url
 
 if (__name__ == "__main__"):
-    initDatabase()
+    path = os.path.join("/", "home", "haribala", "the_library_app", "test")
+    initDatabase(path)
 
     add_data=[("Harry Potter part2", "haribcva@gmail.com"), ("Bhagavad Gita", "haribcva@gmail.com"),
               ("Salesforce made easy", "chitrakris@gmail.com"), ("Bhagavad Gita", "chitrakris@gmail.com")]
@@ -186,11 +180,11 @@ if (__name__ == "__main__"):
             list_of_books = get_books()
 
         for book in list_of_books:
-            if (book[2].status == 0):
+            if (book[3] == 0):
                 str = "FREE"
             else:
                 str = "BORRROWED"
-            print("Name: ", book[0], "owner:", book[2].owner, "Status: ", str)
+            print("Name: ", book[0], "owner:", book[2], "Status: ", str)
 
 
     #### user related tests

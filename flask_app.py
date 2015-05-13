@@ -2,13 +2,10 @@ from flask import Flask
 from flask import render_template, flash, redirect
 from flask.ext.login import LoginManager
 from flask.ext.openid import OpenID
-import os, sys
+import os, sys, logging
 # from flask.ext.sqlalchemy import SQLAlchemy
 from flask import render_template, flash, redirect, session, url_for, request, g
 from flask.ext.login import login_user, logout_user, current_user, login_required
-
-from library import *
-
 
 WTF_CSRF_ENABLED = True
 SECRET_KEY = 'you-will-never-guess'
@@ -25,12 +22,24 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(basedir, 'app.db')
 SQLALCHEMY_MIGRATE_REPO = os.path.join(basedir, 'db_repository')
 
+def initLogging():
+    path = os.path.join(basedir, "log", "library_log")
+    logHandler = logging.FileHandler(path)
+    logHandler.setLevel(logging.WARNING)
+    logHandler.setFormatter(logging.Formatter(
+            '%(asctime)s %(levelname)s: %(message)s '
+                '[in %(pathname)s:%(lineno)d]'
+                ))
+    app.logger.addHandler(logHandler)
+
 app = Flask(__name__)
 app.config.from_object('config')
+initLogging()
+app.logger.warning("to init Login Manager subsystem")
 lm = LoginManager()
 lm.init_app(app)
 oid = OpenID(app, os.path.join(basedir, 'tmp'))
-initDatabase()
+databaseInited = False
 
 from flask.ext.wtf import Form
 from wtforms import StringField, BooleanField
@@ -40,6 +49,28 @@ class PostForm(Form):
     post = StringField('post', validators=[DataRequired()])
     book = StringField('book', validators=[DataRequired()])
 
+class bookData:
+    def __init__(self, owner_email):
+        self.owner = owner_email
+        self.status = STATUS_FREE
+        self.borrowerData = None
+
+class userData:
+    def __init__(self, user_email, user_name, lendPref, exchangePref):
+        self.user_id = user_email
+        self.user_name = user_name
+        self.updateUserData(lendPref, exchangePref)
+
+    def updateUserData(self, lendPref, exchangePref):
+        # all, friends only ("google+" or "facebook")
+        self.lendPref = None
+        if lendPref in ["All", "google+", "facebook"]:
+            self.lendPref = lendPref
+        self.exchangePref = None
+        if exchangePref in ["All", "google+", "facebook"]:
+            self.exchangePref = exchangePref
+
+from library import *
 
 @app.route('/style.css', methods=['GET'])
 def get_style_css():
@@ -74,7 +105,7 @@ def lend_books():
     if request.method == 'POST':
         choiceDict = request.values
         for key in choiceDict:
-            add_book(choiceDict[key], "haribcva@gmail.com")
+            add_book(choiceDict[key], session['login_email_addr'])
 
         return redirect('/mybooks')
     return render_template("lend_books.html")
@@ -85,10 +116,11 @@ def borrow_books():
     if request.method == 'POST':
         if (request.form["bookname"] == ""):
             ### user is asking to show all books that he can borrow
-            books = get_borrowable_books(session['loggedin_user'])
+            #books = get_borrowable_books(session['login_email_addr'])
+            books = get_borrowable_books('chitrakris@gmail.com')
         else:
             ### user is performing a search with specific bookname.
-            books = regex_search_borrowable_books(session['loggedin_user'], request.form["bookname"])
+            books = regex_search_borrowable_books(session['login_email_addr'], request.form["bookname"])
 
     return render_template("my_books.html",
                            title='Books you can borrow',
@@ -124,7 +156,7 @@ def get_mybooks(path):
         books = get_books(user=path)
     else:
         books = get_books(name=path)
-    # books = [("water",""), ("air","")]
+    print "returned books were", books
     return render_template("my_books.html",
                            title='My Books',
                            your_books=books)
@@ -152,9 +184,11 @@ class LoginForm(Form):
 #in the context of current request.
 @app.before_request
 def before_request():
-    print ("at before request")
     g.user = current_user
-    g.something = None
+    global databaseInited, basedir
+    if (databaseInited == False):
+        initDatabase(basedir)
+        databaseInited = True
 
 @app.route('/login', methods=['GET', 'POST'])
 @oid.loginhandler
@@ -204,15 +238,6 @@ def after_login(resp):
     return redirect('/index')
     # return redirect(request.args.get('next') or url_for('index'))
 
-def do_something():
-    if g.something:
-        print ("I found something, it is", g.something)
-    else:
-        print ("There is nothing to do")
-
-    return
-        
-
 #@login_required
 ######### End Login related
 @app.route('/', methods=['GET', 'POST'])
@@ -228,13 +253,10 @@ def index():
             user = {'nickname': nickname}
             user_borrowed_books = get_borrowed_books(session['login_email_addr'])
     except:
-        # login did not happen well, work as guest for now
-        # g["something"] = 2
-        g.something = 2
-        session['loggedin_user'] = "None"
+        # login did not happen well, add hari as default user.
+        session['login_email_addr'] = "haribcva@gmail.com"
         pass
 
-    do_something()
 
     return render_template("index.html",
                            title='Home',
