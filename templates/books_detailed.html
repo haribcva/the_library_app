@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1>Book Details</h1>
+<p> Detailed Info of the book</p>
+<div class="books_detailed_list">
+<div class="book_detailed_entry">
+{% for book,bookurl,owner,status in your_books %}
+<div><p> <b>Name:{{ book }}</b>  Owner:{{owner}} Status:{{status}} </p></div>
+{% endfor %}
+</div>
+</div>
+{% endblock %}
