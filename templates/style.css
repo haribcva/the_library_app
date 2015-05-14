@@ -5,13 +5,13 @@
   font-size: 48px;
   font-family: 'Shift', sans-serif;
   font-weight: bold;
-
 }
 
 .bigTitle a {
   color: yellow;
   font-size: 24px;
 }
+
 .books_list{
     color:green;
 }
@@ -21,3 +21,27 @@
     font-size: 48px;
     font-weight: bold;
 }
+
+.books_detailed_list nameS{
+    color: brown;
+    font-size: 30px;
+    font-weight: bold;
+}
+
+.books_detailed_list ownerS{
+    color: green;
+    font-size: 30px;
+    font-weight: bold;
+}
+
+.books_detailed_list statusS{
+    color: red;
+    font-size: 30px;
+    font-weight: bold;
+}
+
+.books_detailed_list a {
+    color: blue;
+    font-size: 30px;
+}
+

@@ -105,7 +105,7 @@ def lend_books():
     if request.method == 'POST':
         choiceDict = request.values
         for key in choiceDict:
-            add_book(choiceDict[key], session['login_email_addr'])
+            add_book(choiceDict[key], session.get('login_email_addr','haribcva@gmail.com'))
 
         return redirect('/mybooks')
     return render_template("lend_books.html")
@@ -116,16 +116,22 @@ def borrow_books():
     if request.method == 'POST':
         if (request.form["bookname"] == ""):
             ### user is asking to show all books that he can borrow
-            #books = get_borrowable_books(session['login_email_addr'])
+            #books = get_borrowable_books(session.get('login_email_addr','haribcva@gmail.com'))
+            #to allow for scripts not using sessions, don't depend on session for now
             books = get_borrowable_books('chitrakris@gmail.com')
         else:
             ### user is performing a search with specific bookname.
-            books = regex_search_borrowable_books(session['login_email_addr'], request.form["bookname"])
+            books = regex_search_borrowable_books(session.get('login_email_addr','haribcva@gmail.com'), request.form["bookname"])
 
     return render_template("my_books.html",
                            title='Books you can borrow',
                            your_books=books)
 
+@app.route('/borrowthis', methods=['GET'])
+def borrow_book_byname():
+    searchword = request.args.get('name', '')
+    print "Attempting to borrow", searchword
+    return "Not Yet Implemented"
 
 @app.route('/what_work', methods=['GET', 'POST'])
 def get_whatwork():
@@ -150,14 +156,21 @@ def get_mybooks(path):
     # /mybooks/app.js and /mybooks/style.css should be ignored.
     # only /mybooks/ should get all books; path == "" in this case
     books=[]
+    detailed = False
     if (path == ''):
         books = get_books()
     elif (path.find("@") != -1):
         books = get_books(user=path)
     else:
+        detailed = True
         books = get_books(name=path)
-    print "returned books were", books
-    return render_template("my_books.html",
+    #print "returned books were", books
+    if (detailed == False):
+        return render_template("my_books.html",
+                           title='My Books',
+                           your_books=books)
+    else:
+        return render_template("books_detailed.html",
                            title='My Books',
                            your_books=books)
 

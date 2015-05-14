@@ -2,12 +2,24 @@
 {% block content %}
 
 <h1>Your Books</h1>
-<p> You have no books at this time, check back later</p>
-<div class="books_list">
-<div class="book_entry">
-{% for book,bookurl,owner,status in your_books %}
-    <div><p> <b>{{ book }}</b> <a href={{ bookurl }}>Book Details</a> </p></div>
-{% endfor %}
+<div class="no_books_now">
+     <p> You have no books at this time, check back later</p>
+     <script type="text/javascript">
+        var done = 0;
+     </script>
 </div>
+<div class="books_list">
+    <div class="book_entry">
+        {% for book,bookurl,owner,status in your_books %}
+        <div><p> <b>{{ book }}</b> <a href={{ bookurl }}>Book Details</a> </p></div>
+        <script type="text/javascript">
+        if (done == 0) {
+            var x = document.getElementsByClassName("no_books_now");
+            x[0].innerHTML = "";
+            done = 1;
+        }
+        </script>
+        {% endfor %}
+    </div>
 </div>
 {% endblock %}

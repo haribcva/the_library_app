@@ -93,6 +93,11 @@ def remove_book():
 
 # returns [(book, url, owner, status)]
 def get_books(user=None, name=None):
+    print "get_books: passed: ", user, name
+    if (name != None):
+        # reverse mange it
+        name = name.replace(";", " ")
+        print "after unmangling we have", name
     books = []
     for book in dbBook.db:
         blob = dbBook.db[book]
@@ -142,16 +147,18 @@ def get_borrowable_books(current_user):
                     books_url.append((book, "/mybooks/"+book))
                 else:
                     print ("Other Lending Preference not implemented, adding the book anyway")
-                    books_url.append((book, "/mybooks/"+book, book_data.owner, book_data.status))
+                    book_mangled = book.replace(" ", ";")
+                    books_url.append((book, "/mybooks/"+book_mangled, book_data.owner, book_data.status))
             except KeyError:
                 ### user not in database, log it.; till login is implemented, make this book available anyway
-                books_url.append((book, "/mybooks/"+book, book_data.owner, book_data.status))
+                book_mangled = book.replace(" ", ";")
+                books_url.append((book, "/mybooks/"+book_mangled, book_data.owner, book_data.status))
                 pass
 
     return books_url
 
 def regex_search_borrowable_books(current_user, search_string):
-    books_url = [("Tintin","/mybooks/Tintin"), ("Land", "/mybooks/land")]
+    books_url=[]
     return books_url
 
 if (__name__ == "__main__"):
