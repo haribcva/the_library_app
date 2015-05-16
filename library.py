@@ -8,6 +8,7 @@ from flask_app import app, bookData, userData
 
 STATUS_FREE     = 0
 STATUS_BORROWED = 1
+database_list = []
 
 app.logger.warning("logging from library module")
 
@@ -25,14 +26,25 @@ class appDatabasePickle(appDatabase):
     def store_blob(self, key, blob):
         self.db[key] = blob
 
+    def close_database(self):
+        self.db.close()
+
 def initDatabase(path):
     global dbBook, dbUser
 
     db_books_path = os.path.join(path,"db", "books_database");
     print ("to open dn file", db_books_path)
     dbBook = appDatabasePickle(db_books_path)
+    database_list.append(dbBook);
+
     db_users_path = os.path.join(path,"db", "users_database");
     dbUser = appDatabasePickle(db_users_path)
+    database_list.append(dbUser);
+
+
+def closeDatabase():
+    for db in database_list:
+        db.db.close()
 
 def normalize_unicode(string_list):
     for index, string in enumerate(string_list):

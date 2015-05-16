@@ -49,6 +49,9 @@ class PostForm(Form):
     post = StringField('post', validators=[DataRequired()])
     book = StringField('book', validators=[DataRequired()])
 
+STATUS_FREE     = 0
+STATUS_BORROWED = 1
+
 class bookData:
     def __init__(self, owner_email):
         self.owner = owner_email
