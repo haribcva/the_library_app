@@ -4,10 +4,10 @@ import unicodedata
 import shelve
 import os.path
 
+from multiprocessing import JoinableQueue, Process
 from flask_app import app, bookData, userData
+from dbmodel import *
 
-STATUS_FREE     = 0
-STATUS_BORROWED = 1
 database_list = []
 
 app.logger.warning("logging from library module")
@@ -33,7 +33,7 @@ def initDatabase(path):
     global dbBook, dbUser
 
     db_books_path = os.path.join(path,"db", "books_database");
-    print ("to open dn file", db_books_path)
+    app.logger.warning("to open db file {0}".format(db_books_path))
     dbBook = appDatabasePickle(db_books_path)
     database_list.append(dbBook);
 
@@ -46,21 +46,81 @@ def closeDatabase():
     for db in database_list:
         db.db.close()
 
-def normalize_unicode(string_list):
+def emailInfo(emailData):
+    app.logger.error("sending email is not yet implemented")
+
+def sendEmailWorker(inputQueue, replyQueue):
+    proc_name = "sendEmailWorker"
+    while True:
+        next_task = inputQueue.get()
+        if next_task is None:
+            # Poison pill means shutdown
+            #print '%s: Exiting' % proc_name
+            inputQueue.task_done()
+            break
+        #print '%s: %s' % (proc_name, next_task)
+        answer = emailInfo(next_task)
+        inputQueue.task_done()
+        replyQueue.put(answer)
+
+    app.logger.warning("Worker Queue, All done to die")
+    return
+
+class emailSubsystem(object):
+    def __init__(self):
+        ### will move to Celery eventually; with Celery, the app would be able to periodically
+        # wakeup and check on replyQueue to see which emails were send, which were not and
+        # what to do ...
+
+        self.inputQueue = JoinableQueue()
+        self.replyQueue = JoinableQueue()
+
+        self.worker = Process(target=sendEmailWorker, args=(self.inputQueue, self.replyQueue))
+
+    def start(self):
+        self.worker.start()
+
+    def shutdown(self):
+        # post poison pill
+        # wait on the queue to be done; ie join on inputQueue
+        # wait on the worker process to die; ie join on worker
+
+        self.inputQueue.put(None)
+        self.inputQueue.join()
+        self.worker.join()
+
+def initEmailSubsystem():
+    global emailSystem
+
+    emailSystem = emailSubsystem()
+    emailSystem.start()
+    
+def endEmailSubsystem():
+    emailSystem.shutdown()
+
+def normalize_unicode(inputs):
+    if ((type(inputs) != list)):
+        if (type(inputs) is unicode):
+            return (unicodedata.normalize('NFKD', inputs).encode('ascii','ignore'))
+        else:
+            return inputs
+
+    ## assumed to be a list of strings
+    string_list = inputs
     for index, string in enumerate(string_list):
         if (type(string) is unicode):
             string_list[index] = unicodedata.normalize('NFKD', string).encode('ascii','ignore')
 
 ##### user related
-def add_user(user_email, user_name, lendPref, exchangePref):
+def add_user(user_email, user_name, lendPref="All", exchangePref="All"):
     args = [user_email, user_name, lendPref, exchangePref]
     normalize_unicode(args)
     ## unpack
     user_email, user_name, lendPref, exchangePref = args
-    if user_email not in dbUser.db:
+    if user_email not in dbUser.db: ### XXX replace by functions that hide DB implementation
         data = userData(user_email, user_name, lendPref, exchangePref)
     else:
-        print "user name already exists, ignoring: ", user_email
+        app.logger.warning("user name already exists for {0} just updating".format(user_email))
         data = dbUser.db[user_email]
         data.updateUserData(lendPref, exchangePref)
     dbUser.store_blob(user_email, data)
@@ -72,6 +132,12 @@ def get_user(user_id):
     except KeyError:
         return None
 
+def get_all_users():
+    print "Users known are:"
+    for user_name in dbUser.db:
+        user = dbUser.db[user_name]
+        print user_name, user.user_id, user.user_name, user.lendPref, user.exchangePref, user.borrowedBooks, user.reservedBooks
+
 ##### user related
 
 ##### books related
@@ -82,6 +148,7 @@ def add_book(name, owner_email):
     if (type(name) is unicode):
         name = unicodedata.normalize('NFKD', name).encode('ascii','ignore')
     name = name.upper()
+    app.logger.warning("adding book {0} {1}".format(name, owner_email))
     if name in dbBook.db:
         # book exits; make sure the same person is not adding it again
         blob = dbBook.db[name]
@@ -105,11 +172,12 @@ def remove_book():
 
 # returns [(book, url, owner, status)]
 def get_books(user=None, name=None):
-    print "get_books: passed: ", user, name
+    #print "get_books: passed: ", user, name
     if (name != None):
         # reverse mange it
         name = name.replace(";", " ")
-        print "after unmangling we have", name
+        name = normalize_unicode(name)
+        #print "after unmangling we have", name
     books = []
     for book in dbBook.db:
         blob = dbBook.db[book]
@@ -121,13 +189,57 @@ def get_books(user=None, name=None):
 
     return books
 
-def borrow_book():
+def borrow_this_book(bookname, owner_email, borrower_email):
+    # check if the borrower has already borrowed more than 3 books; if so fail
+    # check if the borrower has already 3 books in reserved status; if so fail 
+    # failures should send a meaningful message
+    # check if the status of book is FREE: if not fail; else change status to RESERVED
+    # inform back to the user that message has been sent to owner of the request
+    # enque a work item that will help send an email later; owner, bookname,borrower
+    # must be part of work enqueued.
+    #get_all_users()
+    bookname = normalize_unicode(bookname)
+    borrower_email = normalize_unicode(borrower_email)
+    owner_email = normalize_unicode(owner_email)
+    #print "after borrowthis inputs:", bookname, borrower_email, owner_email
+
+    ### replace by get_user api hiding database implementation
+    borrower = dbUser.db.get(normalize_unicode(borrower_email), None)
+    if (borrower is None):
+        return False,"Borrower not known"
+    if (len (borrower.borrowedBooks) > 3 or len(borrower.reservedBooks) > 3):
+        return False, "Borrower limit exceeded"
+    book_list = dbBook.db.get(bookname, None)
+    if (book_list == None):
+        return False, "Book not found"
+    book_data = None
+    for data in book_list:
+        if (data.owner == owner_email):
+            book_data = data
+    if book_data is None:
+        return False, "Book not found with right owner"
+    if (book_data.status is not STATUS_FREE):
+        return False, "message 2"
+    ### update reservedBooks list in User DB
+    book_data.status = STATUS_RESERVED
+    borrower.reservedBooks.append(bookname)
+    dbUser.store_blob(borrower_email, borrower)
+    emailQueueData = (owner_email, bookname, borrower_email,)
+    emailSystem.inputQueue.put_nowait(emailQueueData)
+
+    return True, "Book borrow ok"
+
+
+def borrow_get_borrower_data(borrower):
+    # get books borrowed sorted by due date
+    # get books that are in reserved status and owner
+    return {}
+
+def borrow_cancel_borrow_request(bookname, owner):
+    # cancel the borrrow request; put book status back to FREE.
+    # if email queue has info to be sent to owner remove that entry
+    # else, send an email saying the borrower is no longer interested in the book.
     pass
-
-def get_borrowed_books(email_addr):
-    books = ["Alice in wonderland"]
-    return books
-
 
 def get_borrowable_books(current_user):
     # books_url = [("Water","/mybooks/water"), ("Air", "/mybooks/air")]
@@ -158,7 +270,7 @@ def get_borrowable_books(current_user):
                 if (owner.lendPref == "All"):
                     books_url.append((book, "/mybooks/"+book))
                 else:
-                    print ("Other Lending Preference not implemented, adding the book anyway")
+                    app.logger.error("Other Lending Preference not implemented, adding the book anyway")
                     book_mangled = book.replace(" ", ";")
                     books_url.append((book, "/mybooks/"+book_mangled, book_data.owner, book_data.status))
             except KeyError:
@@ -221,6 +333,7 @@ if (__name__ == "__main__"):
     user_list = ["haribcva@gmail.com", "chitrakris@gmail.com", "nobody"]
     for user_id in user_list:
         user_info = get_user(user_id)
+
         if (user_info):
             print "user_info exists: ", user_info.user_id, "with name", user_info.user_name, "shares with ", user_info.lendPref, "exchanges with ", user_info.exchangePref
         else:

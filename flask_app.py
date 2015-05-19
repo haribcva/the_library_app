@@ -25,7 +25,7 @@ SQLALCHEMY_MIGRATE_REPO = os.path.join(basedir, 'db_repository')
 def initLogging():
     path = os.path.join(basedir, "log", "library_log")
     logHandler = logging.FileHandler(path)
-    logHandler.setLevel(logging.WARNING)
+    logHandler.setLevel(logging.INFO)
     logHandler.setFormatter(logging.Formatter(
             '%(asctime)s %(levelname)s: %(message)s '
                 '[in %(pathname)s:%(lineno)d]'
@@ -49,30 +49,8 @@ class PostForm(Form):
     post = StringField('post', validators=[DataRequired()])
     book = StringField('book', validators=[DataRequired()])
 
-STATUS_FREE     = 0
-STATUS_BORROWED = 1
 
-class bookData:
-    def __init__(self, owner_email):
-        self.owner = owner_email
-        self.status = STATUS_FREE
-        self.borrowerData = None
-
-class userData:
-    def __init__(self, user_email, user_name, lendPref, exchangePref):
-        self.user_id = user_email
-        self.user_name = user_name
-        self.updateUserData(lendPref, exchangePref)
-
-    def updateUserData(self, lendPref, exchangePref):
-        # all, friends only ("google+" or "facebook")
-        self.lendPref = None
-        if lendPref in ["All", "google+", "facebook"]:
-            self.lendPref = lendPref
-        self.exchangePref = None
-        if exchangePref in ["All", "google+", "facebook"]:
-            self.exchangePref = exchangePref
-
+from dbmodel import *
 from library import *
 
 @app.route('/style.css', methods=['GET'])
@@ -119,9 +97,8 @@ def borrow_books():
     if request.method == 'POST':
         if (request.form["bookname"] == ""):
             ### user is asking to show all books that he can borrow
-            #books = get_borrowable_books(session.get('login_email_addr','haribcva@gmail.com'))
+            books = get_borrowable_books(session.get('login_email_addr','haribcva@gmail.com'))
             #to allow for scripts not using sessions, don't depend on session for now
-            books = get_borrowable_books('chitrakris@gmail.com')
         else:
             ### user is performing a search with specific bookname.
             books = regex_search_borrowable_books(session.get('login_email_addr','haribcva@gmail.com'), request.form["bookname"])
@@ -132,9 +109,16 @@ def borrow_books():
 
 @app.route('/borrowthis', methods=['GET'])
 def borrow_book_byname():
-    searchword = request.args.get('name', '')
-    print "Attempting to borrow", searchword
-    return "Not Yet Implemented"
+    bookname = request.args.get('name', '')
+    owner = request.args.get('owner', '')
+    #print "Attempting to borrow", bookname, owner
+    borrower = session.get('login_email_addr',u'chitrakris@gmail.com');
+    message = "message default"
+    status,message = borrow_this_book(bookname, owner, borrower)
+    if (not status):
+        return render_template('error.html', msg=message), 403
+    else:
+        return render_template('success.html', msg=message), 200
 
 @app.route('/what_work', methods=['GET', 'POST'])
 def get_whatwork():
@@ -204,16 +188,20 @@ def before_request():
     global databaseInited, basedir
     if (databaseInited == False):
         initDatabase(basedir)
+        initEmailSubsystem()
         databaseInited = True
+
+@app.route('/fake_login', methods=['GET'])
+def fake_login():
+    email = request.args.get('email', '')
+    name = request.args.get('name', '')
+    #print "got inputs during fake_login", email, name
+    add_user(email, name)
+    return redirect('/index')
 
 @app.route('/login', methods=['GET', 'POST'])
 @oid.loginhandler
 def login():
-    if request.method == 'POST':
-        print ("in login via POST")
-    else:
-        print ("in login via GET")
-
     # if g.user is not None and g.user.is_authenticated():
     #    return redirect(url_for('index'))
 
@@ -241,16 +229,15 @@ def after_login(resp):
         print "invalid login seen"
         return redirect(url_for('login'))
     # user = User.query.filter_by(email=resp.email).first()
-    flash('got email as ' + resp.email)
     session['login_email_addr'] = resp.email
     nickname = resp.email.split('@')[0]
-    flash("hello " + nickname + " !!")
     remember_me = False
     if 'remember_me' in session:
         remember_me = session['remember_me']
         session.pop('remember_me', None)
     # login_user(user, remember = remember_me)
     session['logged in'] = True
+    add_user(resp.email, nickname)
     return redirect('/index')
     # return redirect(request.args.get('next') or url_for('index'))
 
@@ -267,7 +254,7 @@ def index():
         if (session['logged in'] == True):
             nickname = session['login_email_addr'].split('@')[0]
             user = {'nickname': nickname}
-            user_borrowed_books = get_borrowed_books(session['login_email_addr'])
+            user_borrowed_books = borrow_get_borrower_data(session['login_email_addr'])
     except:
         # login did not happen well, add hari as default user.
         session['login_email_addr'] = "haribcva@gmail.com"

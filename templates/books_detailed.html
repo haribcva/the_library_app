@@ -8,7 +8,7 @@
             {% if status == 1 %}
                 <div><p> <nameS>Name:{{ book }}</nameS> <ownerS> Owner:{{owner}} </ownerS> <statusS> Status:Not Available</statusS> <a href="/borrowbook">Borrow </a></p></div>
             {% else %}
-            <div><p> <nameS>Name:{{ book }}</nameS> <ownerS> Owner:{{owner}} </ownerS> <statusS> Status:Available</statusS> <a href="/borrowthis?name={{book}}">Borrow </a></p></div>
+            <div><p> <nameS>Name:{{ book }}</nameS> <ownerS> Owner:{{owner}} </ownerS> <statusS> Status:Available</statusS> <a href="/borrowthis?name={{book}}&owner={{owner}}">Borrow </a></p></div>
             {% endif %}
         {% endfor %}
     </div>
