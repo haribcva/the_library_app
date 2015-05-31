@@ -296,8 +296,8 @@ def index():
             nickname = session['login_email_addr'].split('@')[0]
             user = {'nickname': nickname}
             user_borrowed_books = borrow_get_borrower_data(session['login_email_addr'])
-            print "got borrowed_books as:",
-            print user_borrowed_books
+            #print "got borrowed_books as:",
+            #print user_borrowed_books
     except:
         # login did not happen well, add hari as default user.
         session['login_email_addr'] = "haribcva@gmail.com"

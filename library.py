@@ -271,7 +271,8 @@ def get_borrowable_books(current_user):
             try:
                 owner = dbUser.db[book_data.owner]
                 if (owner.lendPref == "All"):
-                    books_url.append((book, "/mybooks/"+book))
+                    book_mangled = book.replace(" ", ";")
+                    books_url.append((book, "/mybooks/"+book_mangled, book_data.owner, book_data.status))
                 else:
                     app.logger.error("Other Lending Preference not implemented, adding the book anyway")
                     book_mangled = book.replace(" ", ";")
