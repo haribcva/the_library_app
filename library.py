@@ -78,7 +78,10 @@ class emailSubsystem(object):
         self.worker = Process(target=sendEmailWorker, args=(self.inputQueue, self.replyQueue))
 
     def start(self):
-        self.worker.start()
+        # temporarily comment out starting a new process as it seems to leave zombies
+        # and causes app not to start as max process limit is reached.
+        #self.worker.start()
+        return
 
     def shutdown(self):
         # post poison pill

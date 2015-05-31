@@ -1,5 +1,5 @@
 from flask import Flask
-from flask import render_template, flash, redirect
+from flask import render_template, flash, redirect, make_response
 from flask.ext.login import LoginManager
 from flask.ext.openid import OpenID
 import os, sys, logging
@@ -39,7 +39,6 @@ app.logger.warning("to init Login Manager subsystem")
 lm = LoginManager()
 lm.init_app(app)
 oid = OpenID(app, os.path.join(basedir, 'tmp'))
-databaseInited = False
 
 from flask.ext.wtf import Form
 from wtforms import StringField, BooleanField
@@ -185,44 +184,85 @@ class LoginForm(Form):
 @app.before_request
 def before_request():
     g.user = current_user
-    global databaseInited, basedir
-    if (databaseInited == False):
-        initDatabase(basedir)
-        initEmailSubsystem()
-        databaseInited = True
 
+class FakeResp(object):
+    def __init__(self, email):
+        self.email = email
+
+# we need this as a way to add users to database
+#/fake_login?email=....
 @app.route('/fake_login', methods=['GET'])
 def fake_login():
-    email = request.args.get('email', '')
-    name = request.args.get('name', '')
-    #print "got inputs during fake_login", email, name
-    add_user(email, name)
-    return redirect('/index')
+    email = request.args.get('email', 'haribcva@gmail.com')
+    f1 = FakeResp(email)
+    return (after_login(f1))
+    #return redirect('/index')
 
 @app.route('/login', methods=['GET', 'POST'])
-@oid.loginhandler
+#@oid.loginhandler
 def login():
     # if g.user is not None and g.user.is_authenticated():
     #    return redirect(url_for('index'))
 
-    if 'logged in' in session:
-        print ("user had already logged in")
+    #if 'logged in' in session:
+    #    print ("user had already logged in")
+    #    app.logger.info("user name {0} has already logged in.".format(session.get('login_email_addr', "guest")))
+    #    return redirect('/index')
+
+    cookie_val = 'guest'
+    not_logged = True
+
+    is_logout = request.args.get('logout_button', None)
+    if (is_logout):
+        session.pop('login_email_addr')
+        g.user = None
+        session['logged in'] = False
+        # must redirect to home page
         return redirect('/index')
 
-    form = LoginForm()
-    if form.validate_on_submit():
-        print ("in driving logic of core login")
-        session['remember_me'] = form.remember_me.data
-        return oid.try_login(form.openid.data, ask_for=['nickname', 'email'])
+    is_login = request.args.get('login_button', None)
+    if (is_login):
+        logged_in = session.get('logged in', False)
+        if logged_in:
+            #print ("user had already logged in")
+            app.logger.info("user name {0} has already logged in.".format(session.get('login_email_addr', "guest")))
+            return redirect('/index')
 
-    return render_template('login.html',
-                           title='Sign In',
-                           form=form,
-                           providers=OPENID_PROVIDERS)
+        app.logger.info("user name {0} is now logged in.".format(session.get('login_email_addr', "guest")))
+        # for now allow all logins without actual verification
+        not_logged = False
+        cookie_val = session.get('login_email_addr', "haribcva@gmail.com")
 
-@oid.after_login
+        # this will redirect to index page.
+        return(fake_login())
+    else:
+        # neither login or logout, user directly entered into "/login" url 
+        return redirect('/index')
+
+    #user = {'nickname': cookie_val}
+    #resp = make_response(render_template('index.html',
+    #                       title='Home',
+    #                       user=user,
+    #                       not_logged=not_logged,
+    #                       borrowed_books=[]))
+    # cookie stuff is really not needed for login processing, added here just to see how to set cookies
+    #resp.set_cookie('username', cookie_val)
+    #return (resp)
+
+    #form = LoginForm()
+    #if form.validate_on_submit():
+    #    print ("in driving logic of core login")
+    #    session['remember_me'] = form.remember_me.data
+    #    return oid.try_login(form.openid.data, ask_for=['nickname', 'email'])
+
+    #return render_template('login.html',
+    #                       title='Sign In',
+    #                       form=form,
+    #                       providers=OPENID_PROVIDERS)
+
+#@oid.after_login
 def after_login(resp):
-    print ("in after_login step")
+    #print ("in after_login step", resp.email)
 
     if resp.email is None or resp.email == "":
         flash('Invalid login. Please try again.')
@@ -238,33 +278,50 @@ def after_login(resp):
     # login_user(user, remember = remember_me)
     session['logged in'] = True
     add_user(resp.email, nickname)
+    #print "added user, redirecting to index page post login", resp.email, nickname
     return redirect('/index')
-    # return redirect(request.args.get('next') or url_for('index'))
+    #return redirect(request.args.get('next') or url_for('index'))
 
 #@login_required
 ######### End Login related
 @app.route('/', methods=['GET', 'POST'])
 @app.route('/index', methods=['GET', 'POST'])
 def index():
-
     user = {'nickname': 'guest'}  # fake user
     user_borrowed_books = {}
 
     try:
         if (session['logged in'] == True):
+            print "logged in set, email addr is", session.get('login_email_addr', "XXX")
             nickname = session['login_email_addr'].split('@')[0]
             user = {'nickname': nickname}
             user_borrowed_books = borrow_get_borrower_data(session['login_email_addr'])
+            print "got borrowed_books as:",
+            print user_borrowed_books
     except:
         # login did not happen well, add hari as default user.
         session['login_email_addr'] = "haribcva@gmail.com"
         pass
 
 
-    return render_template("index.html",
+    # convoluted logic is due to how base.html is strcutured. It is assumed that every
+    # page other than index can be reached only if login attempt has succeeded.
+    # not_logged  would be made available only from index.html, though the base.html
+    # which has the login/logout button show logic is used by every template file.
+    not_logged = True
+    logged_in = session.get('logged in', False)
+    if (logged_in == True):
+        not_logged = False
+
+    resp = make_response(render_template("index.html",
                            title='Home',
                            user=user,
-                           borrowed_books=user_borrowed_books)
+                           not_logged=not_logged,
+                           borrowed_books=user_borrowed_books))
+    return resp
+
+initDatabase(basedir)
+initEmailSubsystem()
 
 if __name__ == '__main__':
     app.run()

@@ -65,6 +65,11 @@ var main = function() {
     $('#all_borrow_books').mouseleave(function(){
         $('#search_book_entry').show();
     });
+
+    /* 
+    var cookie = document.cookie;
+    alert ("cookie was:" + cookie)
+    */
 }
 
 function validateForm() {

@@ -1,17 +1,33 @@
 <html>
   <head>
    {% if title %}
-    <title>{{ title }} - Virtual Library</title>
+    <title>{{ title }} - Virtual Library for you</title>
     {% else %}
-    <title>Virtual Library</title>
+    <title>Virtual Library for you</title>
     {% endif %}
     <link rel="stylesheet" href="/style.css">
   </head>
+
   <body>
     <div class="bigTitle">
     <div>Virtual Library: <a href="/index">Home</a></div>
     </div>
     <hr>
+
+    <form action="login" method="get" name="login_form">
+        {% if not_logged %}
+            {% if not_logged == true %}
+                <div class="login_class">
+                    <input type="submit" name="login_button" value="login" id="login_button_id">
+                </div>
+            {% endif %}
+        {% else %}
+        <div class="logout_class">
+            <input type="submit" name="logout_button" value="logout" id="logout_button_id">
+        </div>
+        {% endif %}
+    </form>
+
     {% with messages = get_flashed_messages() %}
       {% if messages %}
         <ul>
