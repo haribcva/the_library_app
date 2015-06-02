@@ -288,36 +288,38 @@ def after_login(resp):
 @app.route('/index', methods=['GET', 'POST'])
 def index():
     user = {'nickname': 'guest'}  # fake user
-    user_borrowed_books = {}
+    borrowed_books = {}
+    pending_books  = {}
+    approve_books  = {}
+    not_logged = True
 
-    try:
-        if (session['logged in'] == True):
-            print "logged in set, email addr is", session.get('login_email_addr', "XXX")
-            nickname = session['login_email_addr'].split('@')[0]
-            user = {'nickname': nickname}
-            user_borrowed_books = borrow_get_borrower_data(session['login_email_addr'])
-            #print "got borrowed_books as:",
-            #print user_borrowed_books
-    except:
-        # login did not happen well, add hari as default user.
-        session['login_email_addr'] = "haribcva@gmail.com"
-        pass
+    logged_in = session.get('logged in', False)
+    if (logged_in == True):
+        user_id = session.get('login_email_addr', "guest")
+        print "logged in set, email addr is", user_id
+        nickname = user_id.split('@')[0]
+        user = {'nickname': nickname}
+        borrowed_books, pending_books, approve_books  = user_get_data(user_id)
+        #print "got borrowed_books as:",
+        #print user_borrowed_books
+        not_logged = False
+    else:
+        ## ensure the session always has this key as template code relies on this
+        ## field being present
+        session['logged in'] = False
 
 
     # convoluted logic is due to how base.html is strcutured. It is assumed that every
     # page other than index can be reached only if login attempt has succeeded.
     # not_logged  would be made available only from index.html, though the base.html
     # which has the login/logout button show logic is used by every template file.
-    not_logged = True
-    logged_in = session.get('logged in', False)
-    if (logged_in == True):
-        not_logged = False
-
     resp = make_response(render_template("index.html",
                            title='Home',
                            user=user,
                            not_logged=not_logged,
-                           borrowed_books=user_borrowed_books))
+                           borrowed_books=borrowed_books,
+                           pending_books=pending_books,
+                           approve_books=approve_books))
     return resp
 
 initDatabase(basedir)

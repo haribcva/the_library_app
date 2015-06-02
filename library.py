@@ -148,14 +148,16 @@ def get_all_users():
 def add_book(name, owner_email):
     # will initialize status as free, borrower_data as None
     # normalize name, to begin with make it to all lowercaps
-    if (type(name) is unicode):
-        name = unicodedata.normalize('NFKD', name).encode('ascii','ignore')
+    name = normalize_unicode(name)
+    owner_email = normalize_unicode(owner_email)
+
     name = name.upper()
     app.logger.warning("adding book {0} {1}".format(name, owner_email))
     if name in dbBook.db:
         # book exits; make sure the same person is not adding it again
         blob = dbBook.db[name]
         for each in blob:
+            app.logger.warning("book {0} already exists added by {1}".format(name, each.owner))
             if (each.owner == owner_email):
                 ## duplicate insertion from same owner, return
                 return False
@@ -165,6 +167,7 @@ def add_book(name, owner_email):
         blob.append(data)
     else:
         ## add it to the database
+        app.logger.warning("book {0} being added for first time".format(name))
         blob = [bookData(owner_email)]
 
     dbBook.store_blob(name, blob)
@@ -210,6 +213,9 @@ def borrow_this_book(bookname, owner_email, borrower_email):
     borrower = dbUser.db.get(normalize_unicode(borrower_email), None)
     if (borrower is None):
         return False,"Borrower not known"
+    owner = dbUser.db.get(normalize_unicode(owner_email), None)
+    if (owner is None):
+        return False,"Owner not known"
     if (len (borrower.borrowedBooks) > 3 or len(borrower.reservedBooks) > 3):
         return False, "Borrower limit exceeded"
     book_list = dbBook.db.get(bookname, None)
@@ -223,20 +229,46 @@ def borrow_this_book(bookname, owner_email, borrower_email):
         return False, "Book not found with right owner"
     if (book_data.status is not STATUS_FREE):
         return False, "message 2"
-    ### update reservedBooks list in User DB
+
     book_data.status = STATUS_RESERVED
+    dbBook.store_blob(bookname, book_data)
+
+    ### update reservedBooks list in borrower User DB
     borrower.reservedBooks.append(bookname)
     dbUser.store_blob(borrower_email, borrower)
+
+    ### update approveBooks list in owner User DB
+    owner.approveBooks.append(bookname)
+    dbUser.store_blob(owner_email, owner)
+
+    ### form email data
     emailQueueData = (owner_email, bookname, borrower_email,)
     emailSystem.inputQueue.put_nowait(emailQueueData)
 
     return True, "Book borrow ok"
 
 
-def borrow_get_borrower_data(borrower):
+def util_make_url(book):
+    book_mangled = book.replace(" ", ";")
+    return((book, "/mybooks/"+book_mangled))
+
+def user_get_data(user_id):
     # get books borrowed sorted by due date
-    # get books that are in reserved status and owner
-    return {}
+    # get books that have been requested so far, but not approved.
+    # books that are requested to be lent
+    borrowed_books = []
+    requested_books = []
+    approvals_needed_books = []
+    
+    user = dbUser.db.get(normalize_unicode(user_id), None)
+    if (user == None):
+        return borrowed_books, requested_books, approvals_needed_books
+
+    borrowed_books = [util_make_url(book) for book in user.borrowedBooks]
+    requested_books = [util_make_url(book) for book in user.reservedBooks]
+    approvals_needed_books = [util_make_url(book) for book in user.approveBooks]
+
+    return borrowed_books, requested_books, approvals_needed_books
 
 def borrow_cancel_borrow_request(bookname, owner):
     # cancel the borrrow request; put book status back to FREE.
@@ -260,6 +292,8 @@ def get_borrowable_books(current_user):
 
     for book in dbBook.db:
         book_list = dbBook.db[book]
+        print "book is: ", book,
+        print " book_list is: ", book_list
         for book_data in book_list:
             if (book_data.owner == current_user):
                 ## this book is owned by the current_user, no point in him borrowing it

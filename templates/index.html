@@ -1,12 +1,24 @@
 {% extends "base.html" %}
 {% block content %}
-    
-    <h1>Hi, {{ user.nickname }}!!</h1>
-    
-    <h1> Welcome to distributed library application</h1>
     <div class="borrowed_books_class">
-      <p> Your have the following books borrowed </p>
-      {% for book in borrowed_books %}
+      {% if borrowed_books|length > 0 %}
+          <p> You have the following books borrowed </p>
+      {% endif %}
+      {% for book, book_url in borrowed_books %}
+      <div><p>{{ book }} </p></div>
+      {% endfor %}
+
+      {% if pending_books|length > 0 %}
+          <p>You have the following books to be approved</p>
+      {% endif %}
+      {% for book, book_url in pending_books %}
+      <div><p>{{ book }} </p></div>
+      {% endfor %}
+
+      {% if approve_books|length > 0 %}
+          <p>You have the following books to approve</p>
+      {% endif %}
+      {% for book, book_url in approve_books %}
       <div><p>{{ book }} </p></div>
       {% endfor %}
 

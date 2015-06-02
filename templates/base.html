@@ -14,6 +14,12 @@
     </div>
     <hr>
 
+    <div class="welcome">
+    <h1> Welcome to distributed library application</h1>
+    {% if session['logged in'] == true %}
+        <h2> Hey {{session['login_email_addr']}} </h2> 
+    {% endif %}
+    </div>
     <form action="login" method="get" name="login_form">
         {% if not_logged %}
             {% if not_logged == true %}
