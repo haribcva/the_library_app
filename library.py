@@ -5,12 +5,12 @@ import shelve
 import os.path
 
 from multiprocessing import JoinableQueue, Process
-from flask_app import app, bookData, userData
+#from flask_app import app
 from dbmodel import *
 
 database_list = []
 
-app.logger.warning("logging from library module")
+#app.logger.warning("logging from library module")
 
 class appDatabase(object):
     """ base class for the storage of books; it is expected that derived classes
@@ -33,7 +33,7 @@ def initDatabase(path):
     global dbBook, dbUser
 
     db_books_path = os.path.join(path,"db", "books_database");
-    app.logger.warning("to open db file {0}".format(db_books_path))
+    #app.logger.warning("to open db file {0}".format(db_books_path))
     dbBook = appDatabasePickle(db_books_path)
     database_list.append(dbBook);
 
@@ -47,9 +47,11 @@ def closeDatabase():
         db.db.close()
 
 def emailInfo(emailData):
+    from flask_app import app
     app.logger.error("sending email is not yet implemented")
 
 def sendEmailWorker(inputQueue, replyQueue):
+    from flask_app import app
     proc_name = "sendEmailWorker"
     while True:
         next_task = inputQueue.get()
@@ -116,6 +118,7 @@ def normalize_unicode(inputs):
 
 ##### user related
 def add_user(user_email, user_name, lendPref="All", exchangePref="All"):
+    from flask_app import app
     args = [user_email, user_name, lendPref, exchangePref]
     normalize_unicode(args)
     ## unpack
@@ -136,16 +139,17 @@ def get_user(user_id):
         return None
 
 def get_all_users():
-    print "Users known are:"
+    print ("Users known are:")
     for user_name in dbUser.db:
         user = dbUser.db[user_name]
-        print user_name, user.user_id, user.user_name, user.lendPref, user.exchangePref, user.borrowedBooks, user.reservedBooks
+        print (user_name, user.user_id, user.user_name, user.lendPref, user.exchangePref, user.borrowedBooks, user.reservedBooks)
 
 ##### user related
 
 ##### books related
 
 def add_book(name, owner_email):
+    from flask_app import app
     # will initialize status as free, borrower_data as None
     # normalize name, to begin with make it to all lowercaps
     name = normalize_unicode(name)
@@ -277,6 +281,7 @@ def borrow_cancel_borrow_request(bookname, owner):
     pass
 
 def get_borrowable_books(current_user):
+    from flask_app import app
     # books_url = [("Water","/mybooks/water"), ("Air", "/mybooks/air")]
     books_url = []
     ## Walkthrough books database
@@ -292,8 +297,8 @@ def get_borrowable_books(current_user):
 
     for book in dbBook.db:
         book_list = dbBook.db[book]
-        print "book is: ", book,
-        print " book_list is: ", book_list
+        print ("book is: ", book,)
+        print (" book_list is: ", book_list)
         for book_data in book_list:
             if (book_data.owner == current_user):
                 ## this book is owned by the current_user, no point in him borrowing it
@@ -330,7 +335,7 @@ if (__name__ == "__main__"):
     add_data=[("Harry Potter part2", "haribcva@gmail.com"), ("Bhagavad Gita", "haribcva@gmail.com"),
               ("Salesforce made easy", "chitrakris@gmail.com"), ("Bhagavad Gita", "chitrakris@gmail.com")]
     for each in add_data:
-        print "sending args as", each
+        print ("sending args as", each)
         add_book(each[0], each[1]);
 
     print ("all known books:")
@@ -338,7 +343,7 @@ if (__name__ == "__main__"):
     test_data = [{}, {'user':'haribcva@gmail.com'}, {'user':'chitrakris@gmail.com', 'name':'Bhagavad Gita'},
                      {'user':'chitrakris@gmail.com'}]
     for each in test_data:
-        print "sending args as: ", each
+        print ("sending args as: ", each)
         if 'user' in each and 'name' in each:
             list_of_books = get_books(user=each['user'], name=each['name'])
         elif 'user' in each:
@@ -373,12 +378,12 @@ if (__name__ == "__main__"):
         user_info = get_user(user_id)
 
         if (user_info):
-            print "user_info exists: ", user_info.user_id, "with name", user_info.user_name, "shares with ", user_info.lendPref, "exchanges with ", user_info.exchangePref
+            print ("user_info exists: ", user_info.user_id, "with name", user_info.user_name, "shares with ", user_info.lendPref, "exchanges with ", user_info.exchangePref)
         else:
-            print "user_info does not exist: ", user_id
+            print ("user_info does not exist: ", user_id)
 
 
     ###### borrowing related tests
     books = get_borrowable_books("haribcva@gmail.com")
     for book_url in books:
-        print "Book ", book_url[0], "is borrowable"
+        print ("Book ", book_url[0], "is borrowable")

@@ -7,6 +7,21 @@ import os, sys, logging
 from flask import render_template, flash, redirect, session, url_for, request, g
 from flask.ext.login import login_user, logout_user, current_user, login_required
 
+#gplus related
+import json
+import random
+import string
+from apiclient.discovery import build
+from simplekv.memory import DictStore
+from flaskext.kvsession import KVSessionExtension
+from flask import send_file
+import httplib2
+from oauth2client.client import AccessTokenRefreshError
+from oauth2client.client import flow_from_clientsecrets
+from oauth2client.client import FlowExchangeError
+
+#gplus related
+
 WTF_CSRF_ENABLED = True
 SECRET_KEY = 'you-will-never-guess'
 
@@ -43,6 +58,22 @@ oid = OpenID(app, os.path.join(basedir, 'tmp'))
 from flask.ext.wtf import Form
 from wtforms import StringField, BooleanField
 from wtforms.validators import DataRequired
+
+#gplus related
+
+# See the simplekv documentation for details
+store = DictStore()
+
+# This will replace the app's session handling
+KVSessionExtension(store, app)
+
+# Update client_secrets.json with your Google API project information.
+# Do not change this assignment.
+CLIENT_ID = json.loads(
+    open('client_secrets.json', 'r').read())['web']['client_id']
+SERVICE = build('plus', 'v1')
+
+#gplus related end
 
 class PostForm(Form):
     post = StringField('post', validators=[DataRequired()])
@@ -220,6 +251,10 @@ def login():
         # must redirect to home page
         return redirect('/index')
 
+    is_gplus_login = request.args.get('gplus_login_button', None)
+    if (is_gplus_login):
+        return redirect('/login2')
+
     is_login = request.args.get('login_button', None)
     if (is_login):
         logged_in = session.get('logged in', False)
@@ -266,7 +301,7 @@ def after_login(resp):
 
     if resp.email is None or resp.email == "":
         flash('Invalid login. Please try again.')
-        print "invalid login seen"
+        print ("invalid login seen")
         return redirect(url_for('login'))
     # user = User.query.filter_by(email=resp.email).first()
     session['login_email_addr'] = resp.email
@@ -282,6 +317,191 @@ def after_login(resp):
     return redirect('/index')
     #return redirect(request.args.get('next') or url_for('index'))
 
+#gplus related
+APPLICATION_NAME = 'Google+ Python Quickstart'
+
+@app.route('/login2', methods=['GET'])
+def gplus_login():
+  print ("in login2")
+  """Initialize a session for the current user, and render index.html."""
+  # Create a state token to prevent request forgery.
+  # Store it in the session for later validation.
+  state = ''.join(random.choice(string.ascii_uppercase + string.digits)
+                  for x in xrange(32))
+  session['state'] = state
+  # Set the Client ID, Token State, and Application Name in the HTML while
+  # serving it.
+  response = make_response(
+      render_template('login_gplus.html',
+                      CLIENT_ID=CLIENT_ID,
+                      STATE=state,
+                      APPLICATION_NAME=APPLICATION_NAME))
+  response.headers['Content-Type'] = 'text/html'
+  return response
+
+@app.route('/signin_button.png', methods=['GET'])
+def signin_button():
+  """Returns the button image for sign-in."""
+  return send_file("templates/gplus_button.png", mimetype='image/gif')
+
+@app.route('/connect', methods=['POST'])
+def connect():
+  """Exchange the one-time authorization code for a token and
+  store the token in the session."""
+  # Ensure that the request is not a forgery and that the user sending
+  # this connect request is the expected user.
+  if request.args.get('state', '') != session['state']:
+    response = make_response(json.dumps('Invalid state parameter.'), 403)
+    response.headers['Content-Type'] = 'application/json'
+    return response
+  # Normally, the state is a one-time token; however, in this example,
+  # we want the user to be able to connect and disconnect
+  # without reloading the page.  Thus, for demonstration, we don't
+  # implement this best practice.
+  # del session['state']
+
+  code = request.data
+
+  try:
+    # Upgrade the authorization code into a credentials object
+    oauth_flow = flow_from_clientsecrets('client_secrets.json', scope='')
+    oauth_flow.redirect_uri = 'postmessage'
+    credentials = oauth_flow.step2_exchange(code)
+  except FlowExchangeError:
+    response = make_response(
+        json.dumps('Failed to upgrade the authorization code.'), 404)
+    response.headers['Content-Type'] = 'application/json'
+    return response
+
+  # An ID Token is a cryptographically-signed JSON object encoded in base 64.
+  # Normally, it is critical that you validate an ID Token before you use it,
+  # but since you are communicating directly with Google over an
+  # intermediary-free HTTPS channel and using your Client Secret to
+  # authenticate yourself to Google, you can be confident that the token you
+  # receive really comes from Google and is valid. If your server passes the
+  # ID Token to other components of your app, it is extremely important that
+  # the other components validate the token before using it.
+  gplus_id = credentials.id_token['sub']
+
+  stored_credentials = session.get('credentials')
+  stored_gplus_id = session.get('gplus_id')
+  if stored_credentials is not None and gplus_id == stored_gplus_id:
+    response = make_response(json.dumps('Current user is already connected.'),
+                             200)
+    response.headers['Content-Type'] = 'application/json'
+    return response
+  # Store the access token in the session for later use.
+  session['credentials'] = credentials
+  session['gplus_id'] = gplus_id
+  response = make_response(json.dumps('Successfully connected user.', 200))
+  response.headers['Content-Type'] = 'application/json'
+  return response
+
+
+@app.route('/disconnect', methods=['POST'])
+def disconnect():
+  """Revoke current user's token and reset their session."""
+
+  # Only disconnect a connected user.
+  credentials = session.get('credentials')
+  if credentials is None:
+    response = make_response(json.dumps('Current user not connected.'), 401)
+    response.headers['Content-Type'] = 'application/json'
+    return response
+
+  # Execute HTTP GET request to revoke current token.
+  access_token = credentials.access_token
+  url = 'https://accounts.google.com/o/oauth2/revoke?token=%s' % access_token
+  h = httplib2.Http()
+  result = h.request(url, 'GET')[0]
+
+  if result['status'] == '200':
+    # Reset the user's session.
+    del session['credentials']
+    response = make_response(json.dumps('Successfully disconnected.'), 200)
+    response.headers['Content-Type'] = 'application/json'
+    return response
+  else:
+    # For whatever reason, the given token was invalid.
+    response = make_response(
+        json.dumps('Failed to revoke token for given user.', 400))
+    response.headers['Content-Type'] = 'application/json'
+    return response
+
+@app.route('/people', methods=['GET'])
+def people():
+  """Get list of people user has shared with this app."""
+  credentials = session.get('credentials')
+  # Only fetch a list of people for connected users.
+  if credentials is None:
+    response = make_response(json.dumps('Current user not connected.'), 401)
+    response.headers['Content-Type'] = 'application/json'
+    return response
+  try:
+    # Create a new authorized API client.
+    http = httplib2.Http()
+    http = credentials.authorize(http)
+    # Get a list of people that this user has shared with this app.
+    google_request = SERVICE.people().list(userId='me', collection='visible')
+    list_result = google_request.execute(http=http)
+    # n = list_result.get('totalItems')
+    # loop over "n"
+    # id = list_result.get('items')[i].get('id')
+    # execute get request on "id"
+    #form a session variable "gplus_email_list" to form the list of
+    # email addresses that this user has chosen to be made visible to
+    # this app. Not all id will give the email addr as some of those
+    # folks would not have logged into our app, but that is ok.
+    # those users who have not logged in don't have any books to
+    # contribute and knowing their infornation is not useful,
+
+    # first add this user to our database
+    google_request = SERVICE.people().get(userId='me')
+    get_result = google_request.execute(http=http)
+    # get_dumps = json.dumps(get_result)
+    dispName = get_result.get('displayName')
+    email = get_result.get('emails')[0].get('value')
+    session['login_email_addr'] = email
+    session['logged in'] = True
+    add_user(email, dispName)
+
+    # now go over all the ids this user has chosen to expose to this app
+    # for each of those ids, if we can obtain the email addr, addr
+    # to the list maintained in session
+    session['gplus_known_users'] = []
+    list_count = list_result.get('totalItems')
+    for i in range(0, list_count):
+        id = list_result.get('items')[i].get('id')
+        google_request = SERVICE.people().get(userId=id)
+        get_result = google_request.execute(http=http)
+        email_arr = get_result.get('emails')
+        if (email_arr is None):
+            continue
+        email = email_arr[0].get('value')
+        if (email is None):
+            continue
+        session['gplus_known_users'].append(email)
+
+    # must redirect to the page which collects the lending & exchange preference
+    # all this info will be used to add the user to the database and redirect
+    # the user to the page after login.
+    return redirect('/index')
+    #response = make_response(json.dumps(list_result), 200)
+    #response.headers['Content-Type'] = 'application/json'
+
+
+    #return response
+  except AccessTokenRefreshError:
+    #response = make_response(json.dumps('Failed to refresh access token.'), 500)
+    #response.headers['Content-Type'] = 'application/json'
+    #return response
+
+    #Need to generate error html code....
+    return redirect('/index')
+
+#end gplus related
+
+
 #@login_required
 ######### End Login related
 @app.route('/', methods=['GET', 'POST'])
@@ -296,7 +516,7 @@ def index():
     logged_in = session.get('logged in', False)
     if (logged_in == True):
         user_id = session.get('login_email_addr', "guest")
-        print "logged in set, email addr is", user_id
+        print ("logged in set, email addr is", user_id)
         nickname = user_id.split('@')[0]
         user = {'nickname': nickname}
         borrowed_books, pending_books, approve_books  = user_get_data(user_id)
@@ -326,4 +546,5 @@ initDatabase(basedir)
 initEmailSubsystem()
 
 if __name__ == '__main__':
-    app.run()
+    #app.run()
+    app.run(host='0.0.0.0', port=4567)
