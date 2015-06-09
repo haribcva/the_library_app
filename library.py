@@ -248,9 +248,9 @@ def borrow_this_book(bookname, owner_email, borrower_email):
     return True, "Book borrow ok"
 
 
-def util_make_url(book):
+def util_make_url(book, urlbase):
     book_mangled = book.replace(" ", ";")
-    return((book, "/mybooks/"+book_mangled))
+    return((book, urlbase+book_mangled))
 
 def user_get_data(user_id):
     # get books borrowed sorted by due date
@@ -264,9 +264,9 @@ def user_get_data(user_id):
     if (user == None):
         return borrowed_books, requested_books, approvals_needed_books
 
-    borrowed_books = [util_make_url(book) for book in user.borrowedBooks]
-    requested_books = [util_make_url(book) for book in user.reservedBooks]
-    approvals_needed_books = [util_make_url(book) for book in user.approveBooks]
+    borrowed_books = [util_make_url(book, "/mybooks/") for book in user.borrowedBooks]
+    requested_books = [util_make_url(book, "/mypendingbooks/") for book in user.reservedBooks]
+    approvals_needed_books = [util_make_url(book, "/myapprovebooks/") for book in user.approveBooks]
 
     return borrowed_books, requested_books, approvals_needed_books
 
