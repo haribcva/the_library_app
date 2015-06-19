@@ -5,12 +5,26 @@ import shelve
 import os.path
 
 from multiprocessing import JoinableQueue, Process
-#from flask_app import app
 from dbmodel import *
 
 database_list = []
 
-#app.logger.warning("logging from library module")
+#cannot import flask_app due to circular dependency....
+#only place something is needed from flask_app is the logging functions.
+#so workaround is to import flask_app in these functions and also
+#not to call logging in initialization code in this module.
+def log_error(args):
+    from flask_app import app
+    app.logger.error(args)
+    assert False
+
+def log_warning(args):
+    from flask_app import app
+    app.logger.warning(args)
+
+def log_info(args):
+    from flask_app import app
+    app.logger.info(args)
 
 class appDatabase(object):
     """ base class for the storage of books; it is expected that derived classes
@@ -28,12 +42,14 @@ class appDatabasePickle(appDatabase):
 
     def close_database(self):
         self.db.close()
+    # it would be perfect case to introduce property to capture the member
+    # variables. The property underlying code would make db access depending on
+    # type of underlying database type.
 
 def initDatabase(path):
     global dbBook, dbUser
 
     db_books_path = os.path.join(path,"db", "books_database");
-    #app.logger.warning("to open db file {0}".format(db_books_path))
     dbBook = appDatabasePickle(db_books_path)
     database_list.append(dbBook);
 
@@ -47,25 +63,23 @@ def closeDatabase():
         db.db.close()
 
 def emailInfo(emailData):
-    from flask_app import app
-    app.logger.error("sending email is not yet implemented")
+    log_warning("sending email is not yet implemented")
 
-def sendEmailWorker(inputQueue, replyQueue):
-    from flask_app import app
+def sendEmailWorker(emailQueue, replyQueue):
     proc_name = "sendEmailWorker"
     while True:
-        next_task = inputQueue.get()
+        next_task = emailQueue.get()
         if next_task is None:
             # Poison pill means shutdown
             #print '%s: Exiting' % proc_name
-            inputQueue.task_done()
+            emailQueue.task_done()
             break
         #print '%s: %s' % (proc_name, next_task)
         answer = emailInfo(next_task)
-        inputQueue.task_done()
+        emailQueue.task_done()
         replyQueue.put(answer)
 
-    app.logger.warning("Worker Queue, All done to die")
+    log_warning("Worker Queue, All done to die")
     return
 
 class emailSubsystem(object):
@@ -74,10 +88,10 @@ class emailSubsystem(object):
         # wakeup and check on replyQueue to see which emails were send, which were not and
         # what to do ...
 
-        self.inputQueue = JoinableQueue()
+        self.emailQueue = JoinableQueue()
         self.replyQueue = JoinableQueue()
 
-        self.worker = Process(target=sendEmailWorker, args=(self.inputQueue, self.replyQueue))
+        self.worker = Process(target=sendEmailWorker, args=(self.emailQueue, self.replyQueue))
 
     def start(self):
         # temporarily comment out starting a new process as it seems to leave zombies
@@ -87,11 +101,11 @@ class emailSubsystem(object):
 
     def shutdown(self):
         # post poison pill
-        # wait on the queue to be done; ie join on inputQueue
+        # wait on the queue to be done; ie join on emailQueue
         # wait on the worker process to die; ie join on worker
 
-        self.inputQueue.put(None)
-        self.inputQueue.join()
+        self.emailQueue.put(None)
+        self.emailQueue.join()
         self.worker.join()
 
 def initEmailSubsystem():
@@ -118,7 +132,6 @@ def normalize_unicode(inputs):
 
 ##### user related
 def add_user(user_email, user_name, lendPref="All", exchangePref="All"):
-    from flask_app import app
     args = [user_email, user_name, lendPref, exchangePref]
     normalize_unicode(args)
     ## unpack
@@ -126,7 +139,7 @@ def add_user(user_email, user_name, lendPref="All", exchangePref="All"):
     if user_email not in dbUser.db: ### XXX replace by functions that hide DB implementation
         data = userData(user_email, user_name, lendPref, exchangePref)
     else:
-        app.logger.warning("user name already exists for {0} just updating".format(user_email))
+        log_warning("user name already exists for {0} just updating".format(user_email))
         data = dbUser.db[user_email]
         data.updateUserData(lendPref, exchangePref)
     dbUser.store_blob(user_email, data)
@@ -149,19 +162,17 @@ def get_all_users():
 ##### books related
 
 def add_book(name, owner_email):
-    from flask_app import app
     # will initialize status as free, borrower_data as None
     # normalize name, to begin with make it to all lowercaps
     name = normalize_unicode(name)
     owner_email = normalize_unicode(owner_email)
 
     name = name.upper()
-    app.logger.warning("adding book {0} {1}".format(name, owner_email))
     if name in dbBook.db:
         # book exits; make sure the same person is not adding it again
         blob = dbBook.db[name]
         for each in blob:
-            app.logger.warning("book {0} already exists added by {1}".format(name, each.owner))
+            log_warning("book {0} already exists added by {1}".format(name, each.owner))
             if (each.owner == owner_email):
                 ## duplicate insertion from same owner, return
                 return False
@@ -171,7 +182,7 @@ def add_book(name, owner_email):
         blob.append(data)
     else:
         ## add it to the database
-        app.logger.warning("book {0} being added for first time".format(name))
+        log_info("book {0} being added for first time".format(name))
         blob = [bookData(owner_email)]
 
     dbBook.store_blob(name, blob)
@@ -242,19 +253,22 @@ def borrow_this_book(bookname, owner_email, borrower_email):
     dbUser.store_blob(borrower_email, borrower)
 
     ### update approveBooks list in owner User DB
-    owner.approveBooks.append(bookname)
+    owner.approveBooks.append((bookname,borrower_email))
     dbUser.store_blob(owner_email, owner)
 
     ### form email data
-    emailQueueData = (owner_email, bookname, borrower_email,)
-    emailSystem.inputQueue.put_nowait(emailQueueData)
+    emailQueueData = (owner_email, bookname, borrower_email)
+    emailSystem.emailQueue.put_nowait(emailQueueData)
 
     return True, "Book borrow ok"
 
 
-def util_make_url(book, urlbase):
+def util_make_url(book, urlbase,borrower=None):
     book_mangled = book.replace(" ", ";")
-    return((book, urlbase+book_mangled))
+    if (borrower):
+        return((book, urlbase+book_mangled, borrower))
+    else:
+        return((book, urlbase+book_mangled))
 
 def user_get_data(user_id):
     # get books borrowed sorted by due date
@@ -270,7 +284,7 @@ def user_get_data(user_id):
 
     borrowed_books = [util_make_url(book, "/mybooks/") for book in user.borrowedBooks]
     requested_books = [util_make_url(book, "/mypendingbooks/") for book in user.reservedBooks]
-    approvals_needed_books = [util_make_url(book, "/myapprovebooks/") for book in user.approveBooks]
+    approvals_needed_books = [util_make_url(book, "/myapprovebooks/", borrower) for book,borrower in user.approveBooks]
 
     return borrowed_books, requested_books, approvals_needed_books
 
@@ -281,7 +295,6 @@ def borrow_cancel_borrow_request(bookname, owner):
     pass
 
 def get_borrowable_books(current_user):
-    from flask_app import app
     # books_url = [("Water","/mybooks/water"), ("Air", "/mybooks/air")]
     books_url = []
     ## Walkthrough books database
@@ -313,7 +326,7 @@ def get_borrowable_books(current_user):
                     book_mangled = book.replace(" ", ";")
                     books_url.append((book, "/mybooks/"+book_mangled, book_data.owner, book_data.status))
                 else:
-                    app.logger.error("Other Lending Preference not implemented, adding the book anyway")
+                    log_error("Other Lending Preference not implemented, adding the book anyway")
                     book_mangled = book.replace(" ", ";")
                     books_url.append((book, "/mybooks/"+book_mangled, book_data.owner, book_data.status))
             except KeyError:
@@ -328,6 +341,85 @@ def regex_search_borrowable_books(current_user, search_string):
     books_url=[]
     return books_url
 
+#operation: could be one of "approve" or "reject"
+#if book is None, all pending books for the user are approved or rejected.
+#bookname is managled already ie capitalized and spaces replaced by ";"
+def approve_books(user_id, operation, mangled_bookname=None):
+    owner = dbUser.db[user_id]
+    if (owner is None):
+        return ("owner not known for " + user_id)
+
+    bookname = None
+    approveData = []
+
+    if (mangled_bookname is not None):
+        bookname = mangled_bookname.replace(";", " ")
+
+    if (bookname is not None):
+        #identify the borrower
+        for each in owner.approveBooks:
+            if (each[0] == bookname):
+                approveData = [(bookname, each[1])]
+                break
+    else:
+        # work on all books for the approver
+        # make a copy as we will have to make changes to the list maintained in 
+        # the database
+        approveData = list(owner.approveBooks)
+
+    for each in approveData:
+        #unpack the tuple
+        book, borrower_id = each
+        borrower = dbUser.db[borrower_id]
+        if (borrower is None):
+            # log_error are supposed to log an error and assert?
+            log_error("borrower not known for " + borrower_id)
+            continue
+        if (operation == "approve"):
+            try:
+                index = owner.approveBooks.index(each)
+            except ValueError:
+                log_error("unexpected condition...approved book not in owner's approval list!!")
+                #move on to next element...
+                continue
+            entry = owner.approveBooks.pop(index)
+            owner.lentBooks.append(entry)
+            try:
+                index = borrower.reservedBooks.index(book)
+            except ValueError:
+                log_error("unexpected condition...approved book not in borrower's reserved list!!")
+                #move on to next element...
+                continue
+            entry = borrower.reservedBooks.pop(index)
+            borrower.borrowedBooks.append(entry)
+            #supposed to send mail to borrower that owner has agreed to lend the book;
+            #from implementation point of view, it is as though the book has been lent.
+            #it is an core assumption that owner will honor the promise and has given the book..
+            emailQueueData = (borrower_id, bookname, user_id, "approve email format to borrower from owner")
+            emailSystem.emailQueue.put_nowait(emailQueueData)
+        else:
+            # operation is "reject".... remove book from owner's approveBooks queue & borrower's reservedBooks queue...
+            owner.approveBooks.remove(each)
+            borrower.reservedBooks.remove(book)
+            #notify borrower that is reservation has been rejected by owner...
+            emailQueueData = (borrower_id, bookname, user_id, "reject email format to borrower from owner")
+            emailSystem.emailQueue.put_nowait(emailQueueData)
+
+    # identify list of books to work on, if bookname is None
+    # for each book, identify borrower
+    # if operation is approve:
+    #   move book from owner's "approval pending" queue to "return pending" queue.
+    #   move book from borrower's "pending approval" queue to "pending return" queue
+    #   send email to borrower of the transaction & return date
+    # if operation is reject:
+    #    remove book from owner's "approval pending"
+    #    remove book from borrower's "pending approval" queue
+    #    send email to borrower of the transaction.
+
+    # perform all operations in CLEAN DATABASE approach, so that if database changes tomorrow you will be ok.
+    return
+
+######### TEST #########
 if (__name__ == "__main__"):
     path = os.path.join("/", "home", "haribala", "the_library_app", "test")
     initDatabase(path)

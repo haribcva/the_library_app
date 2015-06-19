@@ -15,9 +15,15 @@ class userData:
         self.user_id = user_email
         self.user_name = user_name
         self.updateUserData(lendPref, exchangePref)
+        # all of the following data needs to be made consistent of form [(bookname, user_id)]
+        #a list of books that this person has borrowed
         self.borrowedBooks = []
+        # a list of books that this person has reserved ie books pending approval by owner of that book
         self.reservedBooks = []
+        # a list of tuples of form (bookname, borrower_id): identifies list of books that needs to be approved for lending
         self.approveBooks = []
+        #list of tuples of form (bookname, borrower_id): identifies list of books that has been lent
+        self.lentBooks = []
 
     def updateUserData(self, lendPref, exchangePref):
         # all, friends only ("google+" or "facebook")

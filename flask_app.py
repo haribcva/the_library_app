@@ -34,6 +34,8 @@ OPENID_PROVIDERS = [
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
+print "XXX", basedir
+
 SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(basedir, 'app.db')
 SQLALCHEMY_MIGRATE_REPO = os.path.join(basedir, 'db_repository')
 
@@ -70,7 +72,7 @@ KVSessionExtension(store, app)
 # Update client_secrets.json with your Google API project information.
 # Do not change this assignment.
 CLIENT_ID = json.loads(
-    open('client_secrets.json', 'r').read())['web']['client_id']
+    open('/home/haribala/the_library_app/client_secrets.json', 'r').read())['web']['client_id']
 SERVICE = build('plus', 'v1')
 
 #gplus related end
@@ -190,6 +192,33 @@ def get_mybooks(path):
         return render_template("books_detailed.html",
                            title='My Books',
                            your_books=books)
+
+# can approve books one by one
+# can approve all books in one shot
+@app.route('/myapprovebooks', methods=['POST'])
+def view_approve_books():
+    user_id = session.get('login_email_addr', "guest")
+    for key in request.values:
+        print "view_approve key  & values are:", key, request.values[key]
+    if ("all" in request.values):
+        #user is approving or rejecting all his requests.
+        value = request.values.get("approve all", None)
+        if (value == None):
+            approve_books(user_id, "reject")
+        else:
+            approve_books(user_id, "approve")
+    else:
+        # user is approving specific book; key will be of format 'approveMANGLED_BOOKNAME' format
+        magic_format_len = len("approve")
+        for key in request.values:
+            # use string slicing to locate start of mangled bookname
+            mangled_bookname = key[magic_format_len:]
+
+            approve_books(user_id, request.values[key],mangled_bookname)
+
+    #at this time send him back to home page; the home page should have links
+    #to approve more books or none if all books have been approved.
+    return redirect('/index')
 
 ##### Login Related Starts from here
 
