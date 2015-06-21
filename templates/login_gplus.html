@@ -120,18 +120,12 @@ var helper = (function() {
      * Retrieves and renders the authenticated user's Google+ profile.
      */
     renderProfile: function() {
-    /* add email scope arg here to that email can be retrieved ? */
-    /* email scope is: https://www.googleapis.com/auth/plus.profile.emails.read;
-       however there is a simpler "email" scope too;
-       looks like "email", "profile" scopes
-      are "short" form ie they are not of "uri" form
-      gapi.auth2.init has "scope" has an arg. I think once the correct scope has been mentioned at javascript level,
-      the fetched token passed to server will retain permissions to get the emails from python level server code too*/
+
       var request = gapi.client.plus.people.get( {'userId' : 'me'} );
       request.execute(function(profile) {
-         //alert ("all done");
+
          //redirect's to home page are not working for some reason. Dirty hardcoded hack :-(
-         window.location.replace("http://localhost:4567");
+         window.location.replace("/index");
          return;
          /*
          $.get( "/index", function( data ) {
@@ -282,7 +276,7 @@ function startApp() {
         client_id: '{{ CLIENT_ID }}',
         cookiepolicy: 'single_host_origin',
         fetch_basic_profile: false,
-        scope: 'https://www.googleapis.com/auth/plus.login email'
+        scope: 'https://www.googleapis.com/auth/plus.login https://www.googleapis.com/auth/plus.profile.emails.read'
       }).then(function (){
             console.log('init');
             auth2 = gapi.auth2.getAuthInstance();

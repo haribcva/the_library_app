@@ -34,7 +34,7 @@ OPENID_PROVIDERS = [
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
-print "XXX", basedir
+print ("XXX", basedir)
 
 SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(basedir, 'app.db')
 SQLALCHEMY_MIGRATE_REPO = os.path.join(basedir, 'db_repository')
@@ -71,8 +71,9 @@ KVSessionExtension(store, app)
 
 # Update client_secrets.json with your Google API project information.
 # Do not change this assignment.
+secrets_file_name = os.path.join(basedir, 'client_secrets.json')
 CLIENT_ID = json.loads(
-    open('/home/haribala/the_library_app/client_secrets.json', 'r').read())['web']['client_id']
+    open(secrets_file_name, 'r').read())['web']['client_id']
 SERVICE = build('plus', 'v1')
 
 #gplus related end
@@ -199,7 +200,7 @@ def get_mybooks(path):
 def view_approve_books():
     user_id = session.get('login_email_addr', "guest")
     for key in request.values:
-        print "view_approve key  & values are:", key, request.values[key]
+        print ("view_approve key  & values are:", key, request.values[key])
     if ("all" in request.values):
         #user is approving or rejecting all his requests.
         value = request.values.get("approve all", None)
@@ -282,6 +283,7 @@ def login():
 
     is_gplus_login = request.args.get('gplus_login_button', None)
     if (is_gplus_login):
+        # use gmail login logo and processing...
         return redirect('/login2')
 
     is_login = request.args.get('login_button', None)
@@ -393,7 +395,8 @@ def connect():
 
   try:
     # Upgrade the authorization code into a credentials object
-    oauth_flow = flow_from_clientsecrets('client_secrets.json', scope='')
+    # SHOULD SCOPE be UPGADED here too? XXXXX https://www.googleapis.com/auth/plus.login email plus.profile.emails.read
+    oauth_flow = flow_from_clientsecrets('client_secrets.json', scope='https://www.googleapis.com/auth/plus.login https://www.googleapis.com/auth/plus.profile.emails.read')
     oauth_flow.redirect_uri = 'postmessage'
     credentials = oauth_flow.step2_exchange(code)
   except FlowExchangeError:
@@ -514,6 +517,7 @@ def people():
     # must redirect to the page which collects the lending & exchange preference
     # all this info will be used to add the user to the database and redirect
     # the user to the page after login.
+    print("for user:", dispName, "known folks are:", session['gplus_known_users'])
     return redirect('/index')
     #response = make_response(json.dumps(list_result), 200)
     #response.headers['Content-Type'] = 'application/json'
@@ -526,6 +530,7 @@ def people():
     #return response
 
     #Need to generate error html code....
+    print("AccessTokenRefreshError for id:", id)
     return redirect('/index')
 
 #end gplus related
