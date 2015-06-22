@@ -125,6 +125,10 @@ var helper = (function() {
       request.execute(function(profile) {
 
          //redirect's to home page are not working for some reason. Dirty hardcoded hack :-(
+         //Looks like redirects from server when XmlHttpRequest (XHR) are sent (AJAX uses XHR under the
+         //covers) may not be honored by browsers. Doing explicit redirect.
+
+         console.log("in render profile");
          window.location.replace("/index");
          return;
          /*
