@@ -252,23 +252,28 @@ class FakeResp(object):
 
 # we need this as a way to add users to database
 #/fake_login?email=....
-@app.route('/fake_login', methods=['GET'])
-def fake_login():
-    email = request.args.get('email', 'haribcva@gmail.com')
-    f1 = FakeResp(email)
-    return (after_login(f1))
+#@app.route('/fake_login', methods=['GET'])
+#def fake_login():
+#    email = request.args.get('email', 'haribcva@gmail.com')
+#    f1 = FakeResp(email)
+#    return (after_login(f1))
     #return redirect('/index')
+
+@app.route('/fakelogin', methods=['GET', 'POST'])
+def fake_login():
+    if request.method == 'POST':
+        email = request.values.get("email",None)
+        f1 = FakeResp(email)
+        #it will redirect to home page finally.
+        return (after_login(f1))
+    else:
+        return render_template("fake_login.html")
 
 @app.route('/login', methods=['GET', 'POST'])
 #@oid.loginhandler
 def login():
     # if g.user is not None and g.user.is_authenticated():
     #    return redirect(url_for('index'))
-
-    #if 'logged in' in session:
-    #    print ("user had already logged in")
-    #    app.logger.info("user name {0} has already logged in.".format(session.get('login_email_addr', "guest")))
-    #    return redirect('/index')
 
     cookie_val = 'guest'
     not_logged = True
@@ -286,45 +291,13 @@ def login():
         # use gmail login logo and processing...
         return redirect('/login2')
 
-    is_login = request.args.get('login_button', None)
-    if (is_login):
-        logged_in = session.get('logged in', False)
-        if logged_in:
-            #print ("user had already logged in")
-            app.logger.info("user name {0} has already logged in.".format(session.get('login_email_addr', "guest")))
-            return redirect('/index')
+    is_fake_login = request.args.get('fake_login_button', None)
+    if (is_fake_login):
+        # render fake login form 
+        return redirect('/fakelogin')
 
-        app.logger.info("user name {0} is now logged in.".format(session.get('login_email_addr', "guest")))
-        # for now allow all logins without actual verification
-        not_logged = False
-        cookie_val = session.get('login_email_addr', "haribcva@gmail.com")
-
-        # this will redirect to index page.
-        return(fake_login())
-    else:
-        # neither login or logout, user directly entered into "/login" url 
-        return redirect('/index')
-
-    #user = {'nickname': cookie_val}
-    #resp = make_response(render_template('index.html',
-    #                       title='Home',
-    #                       user=user,
-    #                       not_logged=not_logged,
-    #                       borrowed_books=[]))
-    # cookie stuff is really not needed for login processing, added here just to see how to set cookies
-    #resp.set_cookie('username', cookie_val)
-    #return (resp)
-
-    #form = LoginForm()
-    #if form.validate_on_submit():
-    #    print ("in driving logic of core login")
-    #    session['remember_me'] = form.remember_me.data
-    #    return oid.try_login(form.openid.data, ask_for=['nickname', 'email'])
-
-    #return render_template('login.html',
-    #                       title='Sign In',
-    #                       form=form,
-    #                       providers=OPENID_PROVIDERS)
+    # neither login or logout, user directly entered into "/login" url 
+    return redirect('/index')
 
 #@oid.after_login
 def after_login(resp):
@@ -379,11 +352,13 @@ def signin_button():
 def connect():
   """Exchange the one-time authorization code for a token and
   store the token in the session."""
+  print ("in gplus connect...")
   # Ensure that the request is not a forgery and that the user sending
   # this connect request is the expected user.
   if request.args.get('state', '') != session['state']:
     response = make_response(json.dumps('Invalid state parameter.'), 403)
     response.headers['Content-Type'] = 'application/json'
+    print ("in gplus connect...not connected")
     return response
   # Normally, the state is a one-time token; however, in this example,
   # we want the user to be able to connect and disconnect
@@ -395,7 +370,6 @@ def connect():
 
   try:
     # Upgrade the authorization code into a credentials object
-    # SHOULD SCOPE be UPGADED here too? XXXXX https://www.googleapis.com/auth/plus.login email plus.profile.emails.read
     oauth_flow = flow_from_clientsecrets('client_secrets.json', scope='https://www.googleapis.com/auth/plus.login https://www.googleapis.com/auth/plus.profile.emails.read')
     oauth_flow.redirect_uri = 'postmessage'
     credentials = oauth_flow.step2_exchange(code)
@@ -403,6 +377,7 @@ def connect():
     response = make_response(
         json.dumps('Failed to upgrade the authorization code.'), 404)
     response.headers['Content-Type'] = 'application/json'
+    print ("in gplus connect...failed to upgrade auth code")
     return response
 
   # An ID Token is a cryptographically-signed JSON object encoded in base 64.
@@ -421,12 +396,14 @@ def connect():
     response = make_response(json.dumps('Current user is already connected.'),
                              200)
     response.headers['Content-Type'] = 'application/json'
+    print ("in gplus connect...user already connected")
     return response
   # Store the access token in the session for later use.
   session['credentials'] = credentials
   session['gplus_id'] = gplus_id
   response = make_response(json.dumps('Successfully connected user.', 200))
   response.headers['Content-Type'] = 'application/json'
+  print ("in gplus connect...user now connected")
   return response
 
 
@@ -435,6 +412,7 @@ def disconnect():
   """Revoke current user's token and reset their session."""
 
   # Only disconnect a connected user.
+  print ("in gplus disconnect...")
   credentials = session.get('credentials')
   if credentials is None:
     response = make_response(json.dumps('Current user not connected.'), 401)
@@ -452,22 +430,26 @@ def disconnect():
     del session['credentials']
     response = make_response(json.dumps('Successfully disconnected.'), 200)
     response.headers['Content-Type'] = 'application/json'
+    print ("in gplus disconnect...user disconnected now")
     return response
   else:
     # For whatever reason, the given token was invalid.
     response = make_response(
         json.dumps('Failed to revoke token for given user.', 400))
     response.headers['Content-Type'] = 'application/json'
+    print ("in gplus disconnect...error in revoking token")
     return response
 
 @app.route('/people', methods=['GET'])
 def people():
   """Get list of people user has shared with this app."""
+  print ("in gplus people...")
   credentials = session.get('credentials')
   # Only fetch a list of people for connected users.
   if credentials is None:
     response = make_response(json.dumps('Current user not connected.'), 401)
     response.headers['Content-Type'] = 'application/json'
+    print ("in gplus people...user not connected")
     return response
   try:
     # Create a new authorized API client.
