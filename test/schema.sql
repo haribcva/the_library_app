@@ -10,3 +10,12 @@ create table db_books (
     deadline         date NULL,
     primary key (book_name, owner_email)
     );
+
+create table db_users (
+    user_email         varchar(256) NOT NULL primary key,
+    user_name          varchar(256) NOT NULL,
+    lend_pref          integer default 0,
+    exchange_pref      integer default 0,
+    count_borrowed     integer default 0,
+    count_pending      integer default 0
+    );
