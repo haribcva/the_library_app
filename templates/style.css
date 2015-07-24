@@ -7,6 +7,18 @@
   font-weight: bold;
 }
 
+@media screen and (max-width: 600px) {
+    body {
+             background-color: lightblue;
+         }
+    .bigTitle {
+          height: 125px;
+    }
+    h1 {
+         font-size: 18px;
+    }
+}
+
 .bigTitle a {
   color: yellow;
   font-size: 24px;

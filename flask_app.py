@@ -316,8 +316,8 @@ def after_login(resp):
         session.pop('remember_me', None)
     # login_user(user, remember = remember_me)
     session['logged in'] = True
+    print "to add user, redirecting to index page post login", resp.email, nickname
     add_user(resp.email, nickname)
-    #print "added user, redirecting to index page post login", resp.email, nickname
     return redirect('/index')
     #return redirect(request.args.get('next') or url_for('index'))
 
@@ -474,14 +474,40 @@ def people():
     get_result = google_request.execute(http=http)
     # get_dumps = json.dumps(get_result)
     dispName = get_result.get('displayName')
+    # check this....
+    gplus_id = get_result.get('uid')
     email = get_result.get('emails')[0].get('value')
     session['login_email_addr'] = email
     session['logged in'] = True
-    add_user(email, dispName)
+
+    ### need to store the gplus ID in the database. Need to introduce facebook ID too in the user database.
+    add_user(email, dispName, gplus_id=gplus_id)
 
     # now go over all the ids this user has chosen to expose to this app
-    # for each of those ids, if we can obtain the email addr, addr
-    # to the list maintained in session
+    # there is no way to get the email of the person not currently logged in.
+    # instead when a person logs in we need to get their email and store the 
+    # id & email in the database. [NOT NEEDED: We need to go over the ids that this person
+    # has in his contact (or filtered by some circles such as lending-book-circle)
+    # and lookup each id in the database to get the email.)
+    # this way we can form the (this_userid->email_lists_of_friends_in_group)]
+    # note that when user logs in via gmail-id, we can still get his facebook-id
+    # by looking in the database. The facebook id can be gotten when a user
+    # logins via FB for first time. Since we can get email-id of logged-in person
+    # from FB too, the key of the UserDB can be the email-id. Thus has a person
+    # ever logged via FB or Gmail to the app, we can get the FB or GP ids.
+    # If a book owner has decided to share his book via contacts in FB or GP
+    # we need to see if the current logged in user belongs to either of the group.
+    # I hope that given a FB id (and prior offline permissions), it 
+    # would be possible to fetch the contacts for that id. If so, when we hit a 
+    # book whose owner wants to share with FB group, we can lookup our DB to get the
+    # FB Id of the owner. Then we can lookup FB with that ID and determine IDs of the
+    # owner's group members. If our logged in user's FB Id is in this list, then
+    # this is a borrowable book. This assumes that any user must alteast login once
+    # via GP and FB, if the user has accounts in both places. There must be atleast
+    # one intersection between lender's circle and current logged in person's circle
+    # if the lender has not make his lending pref as "ALL". With this, we need not
+    # form the (userid->email_list_of_friends_in_circles).
+ 
     session['gplus_known_users'] = []
     list_count = list_result.get('totalItems')
     for i in range(0, list_count):
@@ -558,8 +584,9 @@ def index():
                            approve_books=approve_books))
     return resp
 
-initDatabase(basedir)
-initEmailSubsystem()
+#initDatabase(basedir)
+#initEmailSubsystem()
+init_library_system(basedir)
 
 if __name__ == '__main__':
     #app.run()

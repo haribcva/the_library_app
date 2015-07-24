@@ -7,23 +7,7 @@ var search_all_clicked = 0;
 var main = function() {
     /* Push the body and the nav over by 285px over */
     var add_books_counter = 0;
-
-    /*
-    $('.bigTitle').click(function () {
-        $('body').animate({
-            left: "285px", height: "100px", fontSize: "3em"
-        }, 200);
-        var x = document.getElementsByClassName("bigTitle");
-        x[0].style.color = "green";
-
-    });
-    $('.books_list').click(function () {
-        $('.book_entry').animate({
-            fontSize: "3em"
-        }, 200);
-
-    });
-    */
+    var is_mobile = false;
 
     $('#more_lend_books').click(function(){
 
@@ -70,6 +54,33 @@ var main = function() {
     var cookie = document.cookie;
     alert ("cookie was:" + cookie)
     */
+
+    is_mobile = window.matchMedia("only screen and (max-width: 760px)");
+    if (is_mobile.matches) {
+        // in Android code, there is corresponding function
+        // that has been written to return the string.
+        //var output = Android.showToast("How are you?");
+        //$('#fake_login_button_id').val(output);
+    }
+       
+    //alert("I should be seen everywhere");
+
+    //check if URL is lend_books; if so and mobile device, add a new button called "scan ISBN"
+    var loc = location.href;
+    var is_lend = loc.indexOf("lend_books");
+    if (is_lend != -1 &&  is_mobile.matches) {
+        $('#search_books_form').append('<input type="submit" name="scan" value="scan" id="scan_id">');
+        $('#scan_id').click(function() {
+            var output = Android.showToast("How are you?");
+            //assume the output is the name of the book to upload to the server.
+            var xmlhttp;
+
+            xmlhttp=new XMLHttpRequest();
+            xmlhttp.open("POST","",false);
+            xmlhttp.setRequestHeader("Content-type","application/x-www-form-urlencoded");
+            xmlhttp.send("bookname0=FromJSScript");
+        });
+    } 
 }
 
 function validateForm() {

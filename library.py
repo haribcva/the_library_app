@@ -5,12 +5,14 @@ import shelve
 import os.path
 
 from multiprocessing import JoinableQueue, Process
-
 from dbmodel import *
+from dbAccess import *
 
-##hari hari
-#another temp change for testing branching..
-database_list = []
+#database_list = []
+#dbBook = None 
+#dbUser = None
+
+db = None
 
 #cannot import flask_app due to circular dependency....
 #only place something is needed from flask_app is the logging functions.
@@ -19,7 +21,7 @@ database_list = []
 def log_error(args):
     from flask_app import app
     app.logger.error(args)
-    assert False
+    #assert False
 
 def log_warning(args):
     from flask_app import app
@@ -29,41 +31,6 @@ def log_info(args):
     from flask_app import app
     app.logger.info(args)
 
-class appDatabase(object):
-    """ base class for the storage of books; it is expected that derived classes
-    will be built on top of it implementing multiple approaches."""
-    pass
-
-
-""" file backed pickle is the simplest way to store the database"""
-class appDatabasePickle(appDatabase):
-    def __init__(self, path):
-        self.db = shelve.open(path, flag="c",writeback=True)
-
-    def store_blob(self, key, blob):
-        self.db[key] = blob
-
-    def close_database(self):
-        self.db.close()
-    # it would be perfect case to introduce property to capture the member
-    # variables. The property underlying code would make db access depending on
-    # type of underlying database type.
-
-def initDatabase(path):
-    global dbBook, dbUser
-
-    db_books_path = os.path.join(path,"db", "books_database");
-    dbBook = appDatabasePickle(db_books_path)
-    database_list.append(dbBook);
-
-    db_users_path = os.path.join(path,"db", "users_database");
-    dbUser = appDatabasePickle(db_users_path)
-    database_list.append(dbUser);
-
-
-def closeDatabase():
-    for db in database_list:
-        db.db.close()
 
 def emailInfo(emailData):
     log_warning("sending email is not yet implemented")
@@ -134,35 +101,39 @@ def normalize_unicode(inputs):
             string_list[index] = unicodedata.normalize('NFKD', string).encode('ascii','ignore')
 
 ##### user related
-def add_user(user_email, user_name, lendPref="All", exchangePref="All"):
+def add_user(user_email, user_name, gplus_id=0, facebk_id=0,lendPref="All", exchangePref="All"):
+    log_info("trying to add user with data email {0} name {1} gplus_id {2}".format(user_email, user_name, gplus_id))
     args = [user_email, user_name, lendPref, exchangePref]
     normalize_unicode(args)
     ## unpack
     user_email, user_name, lendPref, exchangePref = args
-    if user_email not in dbUser.db: ### XXX replace by functions that hide DB implementation
-        data = userData(user_email, user_name, lendPref, exchangePref)
+    if (db.dbAccess_isUserPresent(user_email) == False):
+        data = userData(user_email, user_name, lendPref, exchangePref, gplus_id=gplus_id, facebk_id=facebk_id)
     else:
         log_warning("user name already exists for {0} just updating".format(user_email))
-        data = dbUser.db[user_email]
+        data = db.dbAccess_getUserData(user_email)
         data.updateUserData(lendPref, exchangePref)
-    dbUser.store_blob(user_email, data)
+    db.dbAccess_storeUserData(user_email, data)
 
 def get_user(user_id):
     try:
-        user_data = dbUser.db[user_id]
+        user_data = db.dbAccess_getUserData(user_id)
         return user_data
     except KeyError:
         return None
 
 def get_all_users():
     print ("Users known are:")
-    for user_name in dbUser.db:
-        user = dbUser.db[user_name]
+    list_of_users = db.dbAccess_getUsersList()
+    #for user_name in dbUser.db:
+    for user_name in list_of_users:
+        user = db.dbAccess_getUserData(user_id)
+        #user = dbUser.db[user_name]
         print (user_name, user.user_id, user.user_name, user.lendPref, user.exchangePref, user.borrowedBooks, user.reservedBooks)
 
-##### user related
+##### end user related
 
-##### books related
+##### begin books related
 
 def add_book(name, owner_email):
     # will initialize status as free, borrower_data as None
@@ -171,24 +142,23 @@ def add_book(name, owner_email):
     owner_email = normalize_unicode(owner_email)
 
     name = name.upper()
-    if name in dbBook.db:
+    if db.dbAccess_isBookPresent(name):
+    #if name in dbBook.db:
         # book exits; make sure the same person is not adding it again
-        blob = dbBook.db[name]
+        blob = db.dbAccess_getBookData(name)
+        #blob = dbBook.db[name]
         for each in blob:
             log_warning("book {0} already exists added by {1}".format(name, each.owner))
             if (each.owner == owner_email):
                 ## duplicate insertion from same owner, return
+                log_error("book {0} already added by same user {1}, not adding again".format(name, each.owner))
                 return False
 
-        ## add it to the database
-        data = bookData(owner_email)
-        blob.append(data)
-    else:
-        ## add it to the database
-        log_info("book {0} being added for first time".format(name))
-        blob = [bookData(owner_email)]
+    ## add it to the database
+    data = bookData(owner_email)
+    db.dbAccess_storeBookData(name, data)
+    log_info("book {0} added for user {1} ".format(name, owner_email))
 
-    dbBook.store_blob(name, blob)
     return True
 
 def remove_book():
@@ -203,8 +173,14 @@ def get_books(user=None, name=None):
         name = normalize_unicode(name)
         #print "after unmangling we have", name
     books = []
-    for book in dbBook.db:
-        blob = dbBook.db[book]
+    all_books_list = db.dbAccess_getBooksList()
+    #for book in dbBook.db:
+    for book in all_books_list:
+        blob = db.dbAccess_getBookData(book);
+        #blob = dbBook.db[book]
+        if (type(blob) is not list):
+            continue
+
         for data in blob:
             if ((user is None and name is None) or (user is not None and data.owner == user) or (name is not None and book == name.upper())):
         # space in book name don't work for hyperlinks, mangle them
@@ -228,15 +204,17 @@ def borrow_this_book(bookname, owner_email, borrower_email):
     #print "after borrowthis inputs:", bookname, borrower_email, owner_email
 
     ### replace by get_user api hiding database implementation
-    borrower = dbUser.db.get(normalize_unicode(borrower_email), None)
+    borrower = db.dbAccess_getUserData(normalize_unicode(borrower_email))
+    #borrower = dbUser.db.get(normalize_unicode(borrower_email), None)
     if (borrower is None):
         return False,"Borrower not known"
-    owner = dbUser.db.get(normalize_unicode(owner_email), None)
+    owner = db.dbAccess_getUserData(normalize_unicode(owner_email))
+    #owner = dbUser.db.get(normalize_unicode(owner_email), None)
     if (owner is None):
         return False,"Owner not known"
     if (len (borrower.borrowedBooks) > 3 or len(borrower.reservedBooks) > 3):
         return False, "Borrower limit exceeded"
-    book_list = dbBook.db.get(bookname, None)
+    book_list =  db.dbAccess_getBookData(bookname)
     if (book_list == None):
         return False, "Book not found"
     book_data = None
@@ -249,15 +227,15 @@ def borrow_this_book(bookname, owner_email, borrower_email):
         return False, "message 2"
 
     book_data.status = STATUS_RESERVED
-    dbBook.store_blob(bookname, book_data)
+    db.dbAccess_storeBookData(bookname, book_data)
 
     ### update reservedBooks list in borrower User DB
     borrower.reservedBooks.append(bookname)
-    dbUser.store_blob(borrower_email, borrower)
+    db.dbAccess_storeUserData(borrower_email, borrower)
 
     ### update approveBooks list in owner User DB
     owner.approveBooks.append((bookname,borrower_email))
-    dbUser.store_blob(owner_email, owner)
+    db.dbAccess_storeUserData(owner_email, owner)
 
     ### form email data
     emailQueueData = (owner_email, bookname, borrower_email)
@@ -281,7 +259,8 @@ def user_get_data(user_id):
     requested_books = []
     approvals_needed_books = []
     
-    user = dbUser.db.get(normalize_unicode(user_id), None)
+    user = db.dbAccess_getUserData(normalize_unicode(user_id))
+    #user = dbUser.db.get(normalize_unicode(user_id), None)
     if (user == None):
         return borrowed_books, requested_books, approvals_needed_books
 
@@ -297,6 +276,7 @@ def borrow_cancel_borrow_request(bookname, owner):
     # else, send an email saying the borrower is no longer interested in the book.
     pass
 
+# try to make current_user as the userDB so we can access more fields
 def get_borrowable_books(current_user):
     # books_url = [("Water","/mybooks/water"), ("Air", "/mybooks/air")]
     books_url = []
@@ -311,10 +291,9 @@ def get_borrowable_books(current_user):
     ##    for optimization reasons, create a dictionary where we store the "{user}: {friends_list}" mapping
     ##    check the mapping dict, see is current_user belongs to the group; if so add the book; 
 
-    for book in dbBook.db:
-        book_list = dbBook.db[book]
-        print ("book is: ", book,)
-        print (" book_list is: ", book_list)
+    all_books = db.dbAccess_getBooksList()
+    for book in all_books:
+        book_list = db.dbAccess_getBookData(book)
         for book_data in book_list:
             if (book_data.owner == current_user):
                 ## this book is owned by the current_user, no point in him borrowing it
@@ -324,14 +303,28 @@ def get_borrowable_books(current_user):
                 continue
 
             try:
-                owner = dbUser.db[book_data.owner]
+                owner = db.dbAccess_getUserData(book_data.owner)
+                #owner = dbUser.db[book_data.owner]
                 if (owner.lendPref == "All"):
                     book_mangled = book.replace(" ", ";")
                     books_url.append((book, "/mybooks/"+book_mangled, book_data.owner, book_data.status))
                 else:
                     log_error("Other Lending Preference not implemented, adding the book anyway")
-                    book_mangled = book.replace(" ", ";")
-                    books_url.append((book, "/mybooks/"+book_mangled, book_data.owner, book_data.status))
+                    continue
+                    # This is the crux of the logic
+                    # if the lendPref == GPlus:
+                    #     check if loggedin_user has gplus_id; if not, then this book is not borrowable & so continue
+                    #     check if logged in user has now logged in via gplus; ie check if google credentials in
+                    #     session container is valid; if not valid, continue;
+                    #     get the gplus_id of book owner; if gplus_id is None, this is an error, log & continue
+                    #     query using GoogleAPI usung gplus_id of the owner and form the list of uid for this book owner id.
+                    #     in that list of uids, check if gplus id of the logged in user exists; if so, book is borrowable
+                    #     form a cache of (owner_gplus_id: his_group_gplus_id) and delete the cache at end of the function.
+
+                    # We need to first form an api that given an gplus_id can do a query and form the mapping cache.
+                    # to do that query, we need something called credentials; we need to use the credentails from 
+                    # the currently loggedin user. This can be gotten from "session" container. ie only when a user
+                    # has logged in via gplus, he can hope to borrow books from a user whose lendPref is gplus.
             except KeyError:
                 ### user not in database, log it.; till login is implemented, make this book available anyway
                 book_mangled = book.replace(" ", ";")
@@ -348,7 +341,8 @@ def regex_search_borrowable_books(current_user, search_string):
 #if book is None, all pending books for the user are approved or rejected.
 #bookname is managled already ie capitalized and spaces replaced by ";"
 def approve_books(user_id, operation, mangled_bookname=None):
-    owner = dbUser.db[user_id]
+    owner = db.dbAccess_getUserData(user_id)
+    #owner = dbUser.db[user_id]
     if (owner is None):
         return ("owner not known for " + user_id)
 
@@ -373,7 +367,8 @@ def approve_books(user_id, operation, mangled_bookname=None):
     for each in approveData:
         #unpack the tuple
         book, borrower_id = each
-        borrower = dbUser.db[borrower_id]
+        borrower = db.dbAccess_getUserData(borrower_id)
+        #borrower = dbUser.db[borrower_id]
         if (borrower is None):
             # log_error are supposed to log an error and assert?
             log_error("borrower not known for " + borrower_id)
@@ -421,6 +416,11 @@ def approve_books(user_id, operation, mangled_bookname=None):
 
     # perform all operations in CLEAN DATABASE approach, so that if database changes tomorrow you will be ok.
     return
+
+def init_library_system(basedir):
+    global db
+    db = initDatabase(basedir)
+    initEmailSubsystem()
 
 ######### TEST #########
 if (__name__ == "__main__"):
