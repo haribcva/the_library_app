@@ -8,6 +8,7 @@ from multiprocessing import JoinableQueue, Process
 
 from dbmodel import *
 
+##hari hari
 database_list = []
 
 #cannot import flask_app due to circular dependency....
