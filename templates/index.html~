@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+    
+    <h1>Hi, {{ user.nickname }}!</h1>
+    
+    <h1> Welcome to distributed library application</h1>
+    <div class="borrowed_books_class">
+      <p> Your have the following books borrowed </p>
+      {% for book in borrowed_books %}
+      <div><p>{{ book }} </p></div>
+      {% endfor %}
+
+    </div>
+    
+    <h3> What would you like to do?</h3>
+    <script>
+    function checkData() {
+        var x = document.forms["post"]["book"].value;
+        if (x == null || x == "") {
+            alert("Name must be mentioned");
+            return false;
+        } else {
+            x = x + " added data";
+            alert (x);
+            return true;
+        }
+    }
+    </script>
+
+     <form action="what_work" method="post" name="work_items">
+         <table>
+              <td></td>
+              <td><input type="submit" name="donate_books" value="Donate Books"></td>
+              <td></td>
+              <td><input type="submit" name="exchange_books" value="Exchange Books"></td>
+              <td></td>
+              <td><input type="submit" name="lend_books" value="Lend Books" id="xxx"></td>
+         </table>
+     </form>
+
+    
+{% endblock %}
